@@ -4,7 +4,7 @@
 
 [bits 16]
 [cpu 8086]
-[org 0x0600]
+[org 0x0700]
 
 ROOT_DIRECTORY_CLUSTER equ 1
 
@@ -54,6 +54,8 @@ Main:
   call FpuDetect
   call CpuFpuPrint
 .detect_memory:
+  call MemoryDetect
+  call MemoryPrint
 .load_kernel:
   mov ax, ROOT_DIRECTORY_CLUSTER
   call DirectoryOpen
@@ -758,6 +760,60 @@ CpuFpuPrint:
   ret
 
 ;-------------------------------------------------------------------------------
+; MEMORY DETECTION
+;-------------------------------------------------------------------------------
+
+;
+; MemoryDetect
+;
+; Inputs:
+;
+;   none
+;
+; Change in registers:
+;
+;   AX = kilobytes of conventional memory
+;   DX = kilobytes of extended memory
+;
+MemoryDetect:
+.get_extended:
+  clc
+  mov ah, 0x88
+  int 0x15
+  jc .no_extended
+  mov dx, ax
+  jmp .get_conventional
+.no_extended:
+  xor ax, ax
+  xor dx, dx
+.get_conventional:
+  int 0x12
+.done:
+  ret
+
+;
+; MemoryPrint
+;
+; Inputs:
+;
+;   AX = kilobytes of conventional memory
+;   DX = kilobytes of extended memory
+;
+; Change in registers:
+;
+;   none
+;
+MemoryPrint:
+  push si
+  mov si, MessageMemorySize
+  push dx
+  push ax
+  call PrintFormatted
+  add sp, 4
+  pop si
+  ret
+
+;-------------------------------------------------------------------------------
 ; DATA
 ;-------------------------------------------------------------------------------
 
@@ -821,6 +877,9 @@ MessageFatParameters:
 
 MessageKernelSysNotFound:
   db "KERNEL.SYS not found.",13,10,0
+
+MessageMemorySize:
+  db '%d KiB conventional memory, %d KiB extended memory',13,10,0
 
 MessageNonMaskableInterrupt:
   db 'NON-MASKABLE INTERRUPT',13,10,0
