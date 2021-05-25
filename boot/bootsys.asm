@@ -62,6 +62,12 @@ Main:
   mov si, FileNameKernelSys
   call DirectorySearch
   jc .kernel_sys_not_found
+  mov si, di
+  mov ax, 0x1000
+  push es
+  mov es, ax
+  call FileLoad
+  pop es
 .enter_protected_mode:
 .done:
   call HaltSystem
@@ -114,13 +120,33 @@ AuxOut:
   call NotImplemented
 
 ;
-; Read sector from disk
+; DiskRead - Read sector from disk
 ;
-;   DX = logical sector
-;   DS:BX = data buffer
+; Inputs:
+;
+;   AX = logical sector
+;   BX = data buffer
+;
+; Change in registers:
+;
+;
 ;
 DiskRead:
-  call NotImplemented
+  push ax
+  push cx
+  push dx
+  call DiskSectorToCHS
+  mov ax, 0x0201
+  int 0x13
+  jc .disk_error
+  pop dx
+  pop cx
+  pop ax
+  ret
+.disk_error:
+  mov si, MessageDiskError
+  call PrintString
+  call HaltSystem
 
 ;
 ; Write sector to disk
@@ -163,6 +189,51 @@ DiskPrint:
   pop si
   ret
 
+;
+; DiskSectorToCHS
+;
+; Inputs:
+;
+;   AX = linear sector
+;
+; Change in registers:
+;
+;   CH = track number
+;   CL = sector number
+;   DH = head number
+;
+DiskSectorToCHS:
+  push ax
+  push dx
+  push bx
+  mov cx, ax
+  mov ax, [DiskSectorsPerTrack]
+  mov dx, [DiskNumberOfHeads]
+  mul dx
+  mov bx, ax
+  mov ax, cx
+  xor dx, dx
+  div bx
+  mov ch, al
+  mov cl, 6
+  shl ah, cl
+  mov cl, ah
+  mov ax, dx
+  xor dx, dx
+  mov bx, [DiskSectorsPerTrack]
+  div bx
+  mov dh, al
+  inc dl
+  or cl, dl
+  pop bx
+  pop ax
+  mov dl, al
+  pop ax
+  ret
+
+;
+; FatInit
+;
 FatInit:
   push ax
   push cx
@@ -193,6 +264,9 @@ FatInit:
   pop ax
   ret
 
+;
+; FatPrint
+;
 FatPrint:
   push si
   push word [FatFirstDataAreaSector]
@@ -212,6 +286,7 @@ HaltSystem:
   mov si, MessageSystemHalted
   call PrintString
 .next:
+  cli
   hlt
   jmp .next
 
@@ -423,20 +498,79 @@ FatClusterToSector:
 ; DirectoryOpen
 ;
 ;   AX = cluster
+;   CX = total entries
 ;
 DirectoryOpen:
   call FatClusterToSector
-  mov [DirectoryCurrentSector], ax
+  mov [DirectoryFirstSector], ax
+  mov [DirectoryTotalEntries], cx
   ret
 
 ;
 ; DirectorySearch
 ;
+; Inputs:
+;
 ;   SI = file name
 ;
+; Change in registers:
+;
+;   CF clear if found, set if not found
+;   DI = pointer to directory entry in sector buffer
+;
+; To do:
+;
+;   - Only searches first sector
+;
 DirectorySearch:
+  push ax
+  push cx
+  push dx
+  push bx
+  mov ax, [DirectoryFirstSector]
+  mov [DirectoryCurrentSector], ax
+  mov word [DirectoryCurrentEntry], 0
+  mov bx, SectorBufferDirectory
+  call DiskRead
+  mov cx, 16
+  mov dx, si
+.entry_loop_start:
+  push cx
+  cld
+  mov cx, 11
+  mov si, dx
+  mov di, bx
+  repe cmpsb
+  jne .entry_mismatch
+.entry_match:
+  mov di, bx
+  clc
+  add sp, 2
+  jmp .epilogue
+.entry_mismatch:
+  pop cx
+  add bx, 32
+  loop .entry_loop_start
+.file_not_found:
   stc
+.epilogue:
+  mov si, dx
+  pop bx
+  pop dx
+  pop cx
+  pop ax
   ret
+
+;
+; FileLoad
+;
+; Inputs:
+;
+;   SI = pointer to directory entry
+;   ES:DI = target to load file to
+;
+FileLoad:
+  call NotImplemented
 
 ;-------------------------------------------------------------------------------
 ; INTERRUPT HANDLERS
@@ -854,6 +988,9 @@ MessageCpu80486:
 MessageCpuFpu:
   db 'CPU: %s    FPU: %s',13,10,0
 
+MessageDiskError:
+  db 'DISK ERROR!',13,10,0
+
 MessageFpuNotPresent:
   db 'Not present',0
 
@@ -913,7 +1050,10 @@ section .bss
   FatFirstFileAllocationTableSector resw 1
   FatFirstRootDirectorySector resw 1
   FatFirstDataAreaSector resw 1
+  DirectoryFirstSector resw 1
   DirectoryCurrentSector resw 1
+  DirectoryTotalEntries resw 1
+  DirectoryCurrentEntry resw 1
   FileCurrentSector resw 1
 
 ;-------------------------------------------------------------------------------
@@ -940,6 +1080,10 @@ absolute 0x0000
   InterruptVectors resd (256-8)
   BiosDataArea resb 256
   DosCommunicationArea resb 256
+
+absolute 0x7000
+  SectorBufferFAT resb 512
+  SectorBufferDirectory resb 512
 
 absolute 0x7c00
   BpbJump                   resb 3
