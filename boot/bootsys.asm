@@ -6,13 +6,21 @@
 [cpu 8086]
 [org 0x0700]
 
-ROOT_DIRECTORY_CLUSTER equ 1
+ROOT_DIRECTORY_CLUSTER  equ 1
+
+DIRECTORY_ENTRY_NAME    equ 0x00
+DIRECTORY_ENTRY_EXT     equ 0x08
+DIRECTORY_ENTRY_ATTR    equ 0x0c
+DIRECTORY_ENTRY_TIME    equ 0x16
+DIRECTORY_ENTRY_DATE    equ 0x18
+DIRECTORY_ENTRY_CLUSTER equ 0x1a
+DIRECTORY_ENTRY_SIZE    equ 0x1c
 
   jmp 0000:Main
 
           db 0
 Signature db 'RX/386 BOOT LOADER ',__UTC_DATE__,' ',__UTC_TIME__,13,10
-Copyright db 'Copyright (c) 2021, Ruud Koot',13,10,0
+Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',13,10,0
 
 Main:
 .setup_registers:
@@ -44,11 +52,6 @@ Main:
 .print_signature:
   mov si, Signature
   call PrintString
-.setup_disk_parameter_block:
-  call DiskInit
-  call DiskPrint
-  call FatInit
-  call FatPrint
 .detect_cpu:
   call CpuDetect
   call FpuDetect
@@ -56,6 +59,11 @@ Main:
 .detect_memory:
   call MemoryDetect
   call MemoryPrint
+.setup_disk_parameter_block:
+  call DiskInit
+  call DiskPrint
+  call FatInit
+  call FatPrint
 .load_kernel:
   mov ax, ROOT_DIRECTORY_CLUSTER
   call DirectoryOpen
@@ -66,9 +74,17 @@ Main:
   mov ax, 0x1000
   push es
   mov es, ax
-  call FileLoad
+  xor di, di
+  call FileRead
   pop es
 .enter_protected_mode:
+  cli
+  mov ax, 0x1000
+  mov ds, ax
+  mov es, ax
+  mov ss, ax
+  xor sp, sp
+  jmp 0x1000:0x0000
 .done:
   call HaltSystem
 .kernel_sys_not_found:
@@ -84,6 +100,7 @@ Main:
 ; Read charater from keyboard
 ;
 ConsoleIn:
+  mov ax, __LINE__
   call NotImplemented
 
 ;
@@ -105,29 +122,33 @@ ConsoleOut:
 ; Send character to printer
 ;
 PrinterOut:
+  mov ax, __LINE__
   call NotImplemented
 
 ;
 ; Get character from serial port
 ;
 AuxIn:
+  mov ax, __LINE__
   call NotImplemented
 
 ;
 ; Send character to serial port
 ;
 AuxOut:
+  mov ax, __LINE__
   call NotImplemented
 
 ;
 ; DiskRead - Read sector from disk
 ;
-; Inputs:
+; Calling Registers:
 ;
 ;   AX = logical sector
-;   BX = data buffer
+;   CX = number of sectors
+;   ES:BX = data buffer
 ;
-; Change in registers:
+; Return Registers:
 ;
 ;
 ;
@@ -135,10 +156,41 @@ DiskRead:
   push ax
   push cx
   push dx
+  push bx
+  push si
+  push di
+  mov si, ax
+  mov di, cx
+.loop_start:
+  mov ax, si
+  mov cx, di
+  or cx, cx
+  jz .loop_done
   call DiskSectorToCHS
+  ; xor ax, ax
+  ; mov al, cl
+  ; push ax
+  ; mov al, dh
+  ; push ax
+  ; mov al, ch
+  ; push ax
+  ; mov al, dl
+  ; push ax
+  ; mov si, MessageDebugDiskRead
+  ; call PrintFormatted
+  ; add sp, 8
   mov ax, 0x0201
+  mov dl, [BpbPhysicalUnit]
   int 0x13
   jc .disk_error
+  add bx, [BpbBytesPerSector]
+  inc si
+  dec di
+  jmp .loop_start
+.loop_done:
+  pop di
+  pop si
+  pop bx
   pop dx
   pop cx
   pop ax
@@ -152,6 +204,7 @@ DiskRead:
 ; Write sector to disk
 ;
 DiskWrite:
+  mov ax, __LINE__
   call NotImplemented
 
 ;-------------------------------------------------------------------------------
@@ -192,11 +245,11 @@ DiskPrint:
 ;
 ; DiskSectorToCHS
 ;
-; Inputs:
+; Calling Registers:
 ;
 ;   AX = linear sector
 ;
-; Change in registers:
+; Return Registers:
 ;
 ;   CH = track number
 ;   CL = sector number
@@ -294,8 +347,9 @@ HaltSystem:
 ; Not imlemented
 ;
 NotImplemented:
+  push ax
   mov si, MessageNotImplemented
-  call PrintString
+  call PrintFormatted
   call HaltSystem
 
 ;
@@ -307,11 +361,14 @@ PrintDecimal:
   push ax
   push cx
   push dx
+  push bx
+  xor bx, bx
   xor dx, dx
   mov cx, 10000
   div cx
   or al, al
   jz .digit4
+  inc bx
   add al, '0'
   call ConsoleOut
 .digit4:
@@ -319,8 +376,12 @@ PrintDecimal:
   xchg ax, dx
   mov cx, 1000
   div cx
+  or bx, bx
+  jnz .digit4p
   or al, al
   jz .digit3
+.digit4p:
+  inc bx
   add al, '0'
   call ConsoleOut
 .digit3:
@@ -328,8 +389,12 @@ PrintDecimal:
   xchg ax, dx
   mov cx, 100
   div cx
+  or bx, bx
+  jnz .digit3p
   or al, al
   jz .digit2
+.digit3p:
+  inc bx
   add al, '0'
   call ConsoleOut
 .digit2:
@@ -337,14 +402,18 @@ PrintDecimal:
   xchg ax, dx
   mov cx, 10
   div cx
+  or bx, bx
+  jnz .digit2p
   or al, al
   jz .digit1
+.digit2p:
   add al, '0'
   call ConsoleOut
 .digit1:
   xchg ax, dx
   add al, '0'
   call ConsoleOut
+  pop bx
   pop dx
   pop cx
   pop ax
@@ -484,6 +553,7 @@ FatClusterToSector:
   push dx
   cmp ax, 1
   je .is_root_directory
+  sub ax, 2
   mov dx, [FatSectorsPerCluster]
   mul dx
   add ax, [FatFirstDataAreaSector]
@@ -509,11 +579,11 @@ DirectoryOpen:
 ;
 ; DirectorySearch
 ;
-; Inputs:
+; Calling Registers:
 ;
 ;   SI = file name
 ;
-; Change in registers:
+; Return Registers:
 ;
 ;   CF clear if found, set if not found
 ;   DI = pointer to directory entry in sector buffer
@@ -531,6 +601,7 @@ DirectorySearch:
   mov [DirectoryCurrentSector], ax
   mov word [DirectoryCurrentEntry], 0
   mov bx, SectorBufferDirectory
+  mov cx, 1
   call DiskRead
   mov cx, 16
   mov dx, si
@@ -562,15 +633,51 @@ DirectorySearch:
   ret
 
 ;
-; FileLoad
+; FileRead
 ;
-; Inputs:
+; Calling Registers:
 ;
 ;   SI = pointer to directory entry
 ;   ES:DI = target to load file to
 ;
-FileLoad:
-  call NotImplemented
+; To do:
+;
+;   - Support non-contiguous files
+;
+FileRead:
+  push ax
+  push cx
+  push dx
+  push bx
+  push si
+  mov ax, [si+DIRECTORY_ENTRY_CLUSTER]
+  push ax
+  call FatClusterToSector
+  push ax
+  mov ax, [si+DIRECTORY_ENTRY_SIZE]
+  push ax
+  xor dx, dx
+  mov bx, [BpbBytesPerSector]
+  div bx
+  or dx, dx
+  jz .no_slack
+  inc ax
+.no_slack:
+  push ax
+  mov si, MessageKernelSysFile
+  call PrintFormatted
+  pop cx
+  add sp, 2
+  pop ax
+  add sp, 2
+  mov bx, di
+  call DiskRead
+  pop si
+  pop bx
+  pop dx
+  pop cx
+  pop ax
+  ret
 
 ;-------------------------------------------------------------------------------
 ; INTERRUPT HANDLERS
@@ -900,11 +1007,11 @@ CpuFpuPrint:
 ;
 ; MemoryDetect
 ;
-; Inputs:
+; Calling Registers:
 ;
 ;   none
 ;
-; Change in registers:
+; Return Registers:
 ;
 ;   AX = kilobytes of conventional memory
 ;   DX = kilobytes of extended memory
@@ -928,12 +1035,12 @@ MemoryDetect:
 ;
 ; MemoryPrint
 ;
-; Inputs:
+; Calling Registers:
 ;
 ;   AX = kilobytes of conventional memory
 ;   DX = kilobytes of extended memory
 ;
-; Change in registers:
+; Return Registers:
 ;
 ;   none
 ;
@@ -988,6 +1095,9 @@ MessageCpu80486:
 MessageCpuFpu:
   db 'CPU: %s    FPU: %s',13,10,0
 
+MessageDebugDiskRead:
+  db 'DiskRead: D = %h, C = %d, H = %d, S = %d',13,10,0
+
 MessageDiskError:
   db 'DISK ERROR!',13,10,0
 
@@ -1012,6 +1122,9 @@ MessageDivisionByZero:
 MessageFatParameters:
   db '%d Sectors/Cluster, FAT @ %d, Root Directory @ %d, Data Area @ %d',13,10,0
 
+MessageKernelSysFile:
+  db 'KERNEL.SYS: Sectors = %d, Size = %d, Sector = %d, Cluster = %d',13,10,0
+
 MessageKernelSysNotFound:
   db "KERNEL.SYS not found.",13,10,0
 
@@ -1025,7 +1138,7 @@ MessageNoCoprocessor:
   db 'NO COPROCESSOR',13,10,0
 
 MessageNotImplemented:
-  db 'OPERATION NOT IMPLEMENTED',13,10,0
+  db 'OPERATION NOT IMPLEMENTED (Line = %d)',13,10,0
 
 MessageSingleStep:
   db 'SINGLE STEP',13,10,0
