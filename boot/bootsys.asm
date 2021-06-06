@@ -114,7 +114,7 @@ Main:
 .enter_protected_mode:
   cli
   mov bx, 0x2820
-  call PicReinitialize
+  call PicInitialize
   mov ax, 0x1000
   mov ds, ax
   mov es, ax
@@ -883,8 +883,8 @@ Interrupt20:
   push ds
   xor ax, ax
   mov ds, ax
-  mov al, PIC_ACKNOWLEDGE
-  out PORT_PIC_MASTER_0, al
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
   pop ds
   pop ax
   iret
@@ -1124,17 +1124,29 @@ MemoryPrint:
 ; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
 ;-------------------------------------------------------------------------------
 
-PORT_PIC_MASTER_0     equ 0x20
-PORT_PIC_MASTER_1     equ 0x21
-PORT_PIC_SLAVE_0      equ 0xa0
-PORT_PIC_SLAVE_1      equ 0xa1
+PORT_PIC_MASTER_CMD       equ 0x20
+PORT_PIC_MASTER_DATA      equ 0x21
+PORT_PIC_SLAVE_CMD        equ 0xa0
+PORT_PIC_SLAVE_DATA       equ 0xa1
+PORT_WAIT                 equ 0x80
 
-PIC_ACKNOWLEDGE       equ 0x20
-PIC_ICW1              equ 0x10
-PIC_ICW1_NEED_ICW4    equ 0x01
-PIC_ICW3_MASTER_IRQ2  equ 0x04
-PIC_ICW3_SLAVE_IRQ2   equ 0x02
-PIC_ICW4_8086_MODE    equ 0x01
+PIC_CMD_ICW1              equ 0x10
+PIC_ICW1_NEED_ICW4        equ 0x01
+PIC_ICW1_EDGE             equ 0x00
+PIC_ICW1_LEVEL            equ 0x01
+PIC_ICW1_CASCADE          equ 0x00
+PIC_ICW1_SINGLE           equ 0x02
+PIC_ICW3_MASTER_IRQ2      equ 0x04
+PIC_ICW3_SLAVE_IRQ2       equ 0x02
+PIC_ICW4_MCS85_MODE       equ 0x00
+PIC_ICW4_8086_MODE        equ 0x01
+PIC_ICW4_MANUAL_EOI       equ 0x00
+PIC_ICW4_AUTO_EOI         equ 0x02
+PIC_ICW4_MASTER_PIC       equ 0x00
+PIC_ICW4_SLAVE_PIC        equ 0x04
+PIC_ICW4_BUFFERED         equ 0x08
+PIC_ICW4_SFNM             equ 0x10
+PIC_CMD_NONSPECIFIC_EOI   equ 0x20
 
 ;
 ; PicReinitialize
@@ -1144,30 +1156,43 @@ PIC_ICW4_8086_MODE    equ 0x01
 ;   BL = master interrupt base
 ;   BH = slave interrupt base
 ;
-PicReinitialize:
+PicInitialize:
   push ax
-  ; ICW1
-  mov al, PIC_ICW1 | PIC_ICW1_NEED_ICW4
-  out PORT_PIC_MASTER_0, al
-  out PORT_PIC_SLAVE_0, al
-  ; ICW2
+.icw1:
+  mov al, PIC_CMD_ICW1 | PIC_ICW1_EDGE | PIC_ICW1_CASCADE | PIC_ICW1_NEED_ICW4
+  out PORT_PIC_MASTER_CMD, al
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_WAIT, al
+.icw2:
   mov al, bl
-  and al, 0xf8
-  out PORT_PIC_MASTER_1, al
+  test al, 0x07
+  jnz .invalid_base
+  out PORT_PIC_MASTER_DATA, al
   mov al, bh
-  and al, 0xf8
-  out PORT_PIC_SLAVE_1, al
-  ; ICW3
+  and al, 0x07
+  jnz .invalid_base
+  out PORT_PIC_SLAVE_DATA, al
+  out PORT_WAIT, al
+.icw3:
   mov al, PIC_ICW3_MASTER_IRQ2
-  out PORT_PIC_MASTER_1, al
+  out PORT_PIC_MASTER_DATA, al
   mov al, PIC_ICW3_SLAVE_IRQ2
-  out PORT_PIC_SLAVE_1, al
-  ; ICW4
-  mov al, PIC_ICW4_8086_MODE
-  out PORT_PIC_MASTER_1, al
-  out PORT_PIC_SLAVE_1, al
+  out PORT_PIC_SLAVE_DATA, al
+  out PORT_WAIT, al
+.icw4:
+  mov al, PIC_ICW4_8086_MODE | PIC_ICW4_MANUAL_EOI
+  out PORT_PIC_MASTER_DATA, al
+  out PORT_PIC_SLAVE_DATA, al
+  out PORT_WAIT, al
+.epilogue:
   pop ax
   ret
+.invalid_base:
+  mov si, MessagePicInvalidBase
+  push bx
+  call PrintFormatted
+  add sp, 2
+  call HaltSystem
 
 ;-------------------------------------------------------------------------------
 ; DATA
@@ -1260,6 +1285,9 @@ MessageNoCoprocessor:
 
 MessageNotImplemented:
   db 'OPERATION NOT IMPLEMENTED (Line = %d)',13,10,0
+
+MessagePicInvalidBase:
+  db 'PicInitialize: Invalid base vector (BX = %h)',13,10,0
 
 MessageSingleStep:
   db 'SINGLE STEP',13,10,0
