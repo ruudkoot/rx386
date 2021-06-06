@@ -36,6 +36,7 @@ Main:
   mov [Int00Seg], ax
   mov word [Int01Off], Interrupt01
   mov [Int01Seg], ax
+  ; FIXME: mask NMI
   mov word [Int02Off], Interrupt02
   mov [Int02Seg], ax
   mov word [Int03Off], Interrupt03
@@ -51,7 +52,7 @@ Main:
   mov [Int20Seg], ax
   mov word [Int20Off], Interrupt20
   mov [Int21Seg], ax
-  mov word [Int21Off], InterruptReturn
+  mov word [Int21Off], Interrupt21
   mov [Int22Seg], ax
   mov word [Int22Off], InterruptReturn
   mov [Int23Seg], ax
@@ -475,6 +476,31 @@ PrintDecimal:
   ret
 
 ;
+; PrintByte
+;
+;   AL = number
+;
+PrintByte:
+  push ax
+  push cx
+  push dx
+  push bx
+  mov bx, HexDigits
+  xor dx, dx
+  mov cx, 0x10
+  div cx
+  xlat
+  call ConsoleOut
+  xchg ax, dx
+  xlat
+  call ConsoleOut
+  pop bx
+  pop dx
+  pop cx
+  pop ax
+  ret
+
+;
 ; PrintHex
 ;
 ;   AX = number
@@ -564,6 +590,12 @@ PrintFormatted:
   mov al, [si]
   inc si
   add bp, 2
+.testb:
+  cmp al, 'b'
+  jnz .testd
+  mov ax, [bp]
+  call PrintByte
+  jmp .next
 .testd:
   cmp al, 'd'
   jnz .testh
@@ -880,14 +912,39 @@ Interrupt07:
 
 Interrupt20:
   push ax
+  ;push ds
+  ;xor ax, ax
+  ;mov ds, ax
+  ;mov si, .message
+  ;call PrintString
+  ;call PicDump
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
+  ;pop ds
+  pop ax
+  iret
+.message:
+  db '[TICK]',0
+
+Interrupt21:
+  push ax
   push ds
   xor ax, ax
   mov ds, ax
+  mov si, .message
+  call PrintString
+;  call PicDump
+  in al, PORT_KEYB_DATA
+;  sti
+;.stop:
+;  jmp .stop
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
   pop ds
   pop ax
   iret
+.message:
+  db '[KEY]',0
 
 InterruptReturn:
   iret
@@ -1130,6 +1187,13 @@ PORT_PIC_SLAVE_CMD        equ 0xa0
 PORT_PIC_SLAVE_DATA       equ 0xa1
 PORT_WAIT                 equ 0x80
 
+PIC_CMD_AEOI_ROTATE       equ 0x00
+PIC_CMD_OCW3              equ 0x08
+PIC_OCW3_READ_IRR         equ 0x02
+PIC_OCW3_READ_ISR         equ 0x03
+PIC_OCW3_POLLING_MODE     equ 0x04
+PIC_OCW3_SMM_CLEAR        equ 0x40
+PIC_OCW3_SMM_SET          equ 0x60
 PIC_CMD_ICW1              equ 0x10
 PIC_ICW1_NEED_ICW4        equ 0x01
 PIC_ICW1_EDGE             equ 0x00
@@ -1147,6 +1211,20 @@ PIC_ICW4_SLAVE_PIC        equ 0x04
 PIC_ICW4_BUFFERED         equ 0x08
 PIC_ICW4_SFNM             equ 0x10
 PIC_CMD_NONSPECIFIC_EOI   equ 0x20
+PIC_CMD_NOP               equ 0x40
+PIC_CMD_SPECIFIC_EOI      equ 0x60
+PIC_SEOI_LVL0             equ 0x00
+PIC_SEOI_LVL1             equ 0x01
+PIC_SEOI_LVL2             equ 0x02
+PIC_SEOI_LVL3             equ 0x03
+PIC_SEOI_LVL4             equ 0x04
+PIC_SEOI_LVL5             equ 0x05
+PIC_SEOI_LVL6             equ 0x06
+PIC_SEOI_LVL7             equ 0x07
+PIC_CMD_AEOI_SET_ROTATE   equ 0x80
+PIC_CMD_NSEOI_ROTATE      equ 0xa0
+PIC_CMD_PRIORITY          equ 0xc0
+PIC_CMD_SEOI_ROTATE       equ 0xe0
 
 ;
 ; PicReinitialize
@@ -1184,6 +1262,11 @@ PicInitialize:
   out PORT_PIC_MASTER_DATA, al
   out PORT_PIC_SLAVE_DATA, al
   out PORT_WAIT, al
+.imr:
+  mov al, 0xff
+  out PORT_PIC_MASTER_DATA, al
+  mov al, 0xff
+  out PORT_PIC_SLAVE_DATA, al
 .epilogue:
   pop ax
   ret
@@ -1193,6 +1276,63 @@ PicInitialize:
   call PrintFormatted
   add sp, 2
   call HaltSystem
+
+PicDump:
+  push ax
+  push cx
+  push dx
+  push bx
+  push si
+  mov al, PIC_CMD_OCW3 | PIC_OCW3_READ_IRR
+  out PORT_PIC_MASTER_CMD, al
+  out PORT_PIC_SLAVE_CMD, al
+  in al, PORT_PIC_MASTER_CMD
+  mov cl, al
+  in al, PORT_PIC_SLAVE_CMD
+  mov dl, al
+  mov al, PIC_CMD_OCW3 | PIC_OCW3_READ_ISR
+  out PORT_PIC_MASTER_CMD, al
+  out PORT_PIC_SLAVE_CMD, al
+  in al, PORT_PIC_MASTER_CMD
+  mov ch, al
+  in al, PORT_PIC_SLAVE_CMD
+  mov dh, al
+  in al, PORT_PIC_MASTER_DATA
+  mov bl, al
+  in al, PORT_PIC_SLAVE_DATA
+  mov bh, al
+  xor ah, ah
+  mov al, bh
+  push ax
+  mov al, dh
+  push ax
+  mov al, dl
+  push ax
+  mov al, bl
+  push ax
+  mov al, ch
+  push ax
+  mov al, cl
+  push ax
+  mov si, MessagePicDump
+  call PrintFormatted
+  add sp, 12
+  pop si
+  pop bx
+  pop dx
+  pop cx
+  pop ax
+  ret
+
+MessagePicDump:
+  db 'PIC STATUS [M] IRR=%b ISR=%b IMR=%b [S] IRR=%b ISR=%b IMR=%b',13,10,0
+
+;-------------------------------------------------------------------------------
+; KEYBOARD CONTROLLER
+;-------------------------------------------------------------------------------
+
+PORT_KEYB_DATA    equ 0x60
+PORT_KEYB_CONTROL equ 0x64
 
 ;-------------------------------------------------------------------------------
 ; DATA
