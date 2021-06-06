@@ -109,6 +109,8 @@ Main:
   xor di, di
   call FileRead
   pop es
+.quiescence:
+  call FloppyMotorOff
 .enter_protected_mode:
   cli
   mov bx, 0x2820
@@ -240,6 +242,25 @@ DiskRead:
 DiskWrite:
   mov ax, __LINE__
   call NotImplemented
+
+;
+; FloppyMotorOff - Wait for BIOS to turn off floppy motors
+;
+FloppyMotorOff:
+  push ax
+  push si
+  mov si, MessageFloppyMotorWait
+  call PrintString
+.loop_start:
+  mov al, [BiosDataArea+BDA_MOTOR_SHUTOFF_COUNTER]
+  or al, al
+  jz .loop_done
+  hlt
+  jmp .loop_start
+.loop_done:
+  pop si
+  pop ax
+  ret
 
 ;-------------------------------------------------------------------------------
 ; UTILITIES
@@ -1216,6 +1237,9 @@ MessageDivisionByZero:
 MessageFatParameters:
   db '%d Sectors/Cluster, FAT @ %d, Root Directory @ %d, Data Area @ %d',13,10,0
 
+MessageFloppyMotorWait:
+  db 'Waiting for floppy motor to stop...',13,10,0
+
 MessageIrqTimer:
   db 'TICK!',13,10,0
 
@@ -1370,6 +1394,8 @@ absolute 0x0000
   InterruptVectors resd (256-48)
   BiosDataArea resb 256
   DosCommunicationArea resb 256
+
+BDA_MOTOR_SHUTOFF_COUNTER equ 0x40
 
 absolute 0x7000
   SectorBufferFAT resb 512
