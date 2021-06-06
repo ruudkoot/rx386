@@ -56,6 +56,8 @@ Main:
   call NmiMask
   mov bx, 0x2820
   call A20Dump
+  call A20Enable
+  call A20Test
   call PicInitialize
   mov ax, 0x1000
   mov ds, ax
@@ -1242,8 +1244,96 @@ NmiUnmask:
 ; A20 GATE
 ;-------------------------------------------------------------------------------
 
+BIOS_15H_DISABLE_A20        equ 0x2400
+BIOS_15H_ENABLE_A20         equ 0x2401
+BIOS_15H_A20_STATUS         equ 0x2402
+BIOS_15H_QUERY_A20_SUPPORT  equ 0x2403
+
+;
+; A20Dump
+;
 A20Dump:
+  push ax
+  push bx
+  push si
+  mov ax, BIOS_15H_QUERY_A20_SUPPORT
+  int 0x15
+  jc .query_a20_support_not_supported
+  push bx
+  mov si, .message_query_a20_support
+  call PrintFormatted
+  add sp, 2
+  pop si
+  pop bx
+  pop ax
   ret
+.query_a20_support_not_supported:
+  mov al, ah
+  xor ah, ah
+  push ax
+  mov si, .message_query_a20_support_not_supported
+  call PrintString
+  call HaltSystem
+.message_query_a20_support:
+  db 'A20: BX = %h',13,10,0
+.message_query_a20_support_not_supported:
+  db 'A20: could not query BIOS for A20 support (AH = %b)',13,10,0
+
+;
+; A20Disable
+;
+A20Disable:
+  push ax
+  in al, PORT_SYSTEM_CONTROL_A
+  and al, 0xfd
+  out PORT_SYSTEM_CONTROL_A, al
+  pop ax
+  ret
+
+;
+; A20Enable
+;
+A20Enable:
+  push ax
+  in al, PORT_SYSTEM_CONTROL_A
+  or al, 0x02
+  out PORT_SYSTEM_CONTROL_A, al
+  pop ax
+  ret
+
+;
+; A20Test
+;
+A20Test:
+  push ax
+  push si
+  push es
+  mov ax, 0xffff
+  mov es, ax
+  mov al, 0xaa
+  mov ah, 0x55
+  mov [0x0600], al
+  mov [es:0x0610], ah
+  mov al, [0x0600]
+  mov ah, [es:0x0610]
+  cmp al, ah
+  jnz .different
+.same:
+  mov si, .message_a20_disabled
+  call PrintString
+  call HaltSystem
+.different:
+  mov si, .message_a20_enabled
+  call PrintString
+.epilogue:
+  pop es
+  pop si
+  pop ax
+  ret
+.message_a20_enabled:
+  db "A20 is enabled",13,10,0
+.message_a20_disabled:
+  db "A20 is disabled",13,10,0
 
 ;-------------------------------------------------------------------------------
 ; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
