@@ -31,56 +31,7 @@ Main:
   mov es, ax
   mov ss, ax
   xor sp, sp
-.setup_interrupt_vectors:
-  mov word [Int00Off], Interrupt00
-  mov [Int00Seg], ax
-  mov word [Int01Off], Interrupt01
-  mov [Int01Seg], ax
-  ; FIXME: mask NMI
-  mov word [Int02Off], Interrupt02
-  mov [Int02Seg], ax
-  mov word [Int03Off], Interrupt03
-  mov [Int03Seg], ax
-  mov word [Int04Off], Interrupt04
-  mov [Int04Seg], ax
-  ; mov word [Int05Off], Interrupt05
-  ; mov [Int05Seg], ax
-  mov word [Int06Off], Interrupt06
-  mov [Int06Seg], ax
-  mov word [Int07Off], Interrupt07
-  mov [Int07Seg], ax
-  mov [Int20Seg], ax
-  mov word [Int20Off], Interrupt20
-  mov [Int21Seg], ax
-  mov word [Int21Off], Interrupt21
-  mov [Int22Seg], ax
-  mov word [Int22Off], InterruptReturn
-  mov [Int23Seg], ax
-  mov word [Int23Off], InterruptReturn
-  mov [Int24Seg], ax
-  mov word [Int24Off], InterruptReturn
-  mov [Int25Seg], ax
-  mov word [Int25Off], InterruptReturn
-  mov [Int26Seg], ax
-  mov word [Int26Off], InterruptReturn
-  mov [Int27Seg], ax
-  mov word [Int27Off], InterruptReturn
-  mov [Int28Seg], ax
-  mov word [Int28Off], InterruptReturn
-  mov [Int29Seg], ax
-  mov word [Int29Off], InterruptReturn
-  mov [Int2ASeg], ax
-  mov word [Int2AOff], InterruptReturn
-  mov [Int2BSeg], ax
-  mov word [Int2BOff], InterruptReturn
-  mov [Int2CSeg], ax
-  mov word [Int2COff], InterruptReturn
-  mov [Int2DSeg], ax
-  mov word [Int2DOff], InterruptReturn
-  mov [Int2ESeg], ax
-  mov word [Int2EOff], InterruptReturn
-  mov [Int2FSeg], ax
-  mov word [Int2FOff], InterruptReturn
+  call InterruptSetup
   sti
 .print_signature:
   mov si, Signature
@@ -98,23 +49,13 @@ Main:
   call FatInit
   call FatPrint
 .load_kernel:
-  mov ax, ROOT_DIRECTORY_CLUSTER
-  call DirectoryOpen
-  mov si, FileNameKernelSys
-  call DirectorySearch
-  jc .kernel_sys_not_found
-  mov si, di
-  mov ax, 0x1000
-  push es
-  mov es, ax
-  xor di, di
-  call FileRead
-  pop es
-.quiescence:
+  call KernelLoad
   call FloppyMotorOff
 .enter_protected_mode:
   cli
+  call NmiMask
   mov bx, 0x2820
+  call A20Dump
   call PicInitialize
   mov ax, 0x1000
   mov ds, ax
@@ -123,10 +64,6 @@ Main:
   xor sp, sp
   jmp 0x1000:0x0000
 .done:
-  call HaltSystem
-.kernel_sys_not_found:
-  mov si, MessageKernelSysNotFound
-  call PrintString
   call HaltSystem
 
 ;-------------------------------------------------------------------------------
@@ -767,8 +704,97 @@ FileRead:
   ret
 
 ;-------------------------------------------------------------------------------
+; ENTER KERNEL
+;-------------------------------------------------------------------------------
+
+;
+; KernelLoad
+;
+KernelLoad:
+  push ax
+  push si
+  push di
+  mov ax, ROOT_DIRECTORY_CLUSTER
+  call DirectoryOpen
+  mov si, FileNameKernelSys
+  call DirectorySearch
+  jc .kernel_sys_not_found
+  mov si, di
+  mov ax, 0x1000
+  push es
+  mov es, ax
+  xor di, di
+  call FileRead
+  pop es
+  pop di
+  pop si
+  pop ax
+  ret
+.kernel_sys_not_found:
+  mov si, MessageKernelSysNotFound
+  call PrintString
+  call HaltSystem
+
+;-------------------------------------------------------------------------------
 ; INTERRUPT HANDLERS
 ;-------------------------------------------------------------------------------
+
+PORT_SYSTEM_CONTROL_A equ 0x92
+PORT_SYSTEM_CONTROL_B equ 0x61
+
+InterruptSetup:
+  push ax
+  mov word [Int00Off], Interrupt00
+  mov [Int00Seg], ax
+  mov word [Int01Off], Interrupt01
+  mov [Int01Seg], ax
+  ; FIXME: mask NMI
+  mov word [Int02Off], Interrupt02
+  mov [Int02Seg], ax
+  mov word [Int03Off], Interrupt03
+  mov [Int03Seg], ax
+  mov word [Int04Off], Interrupt04
+  mov [Int04Seg], ax
+  ; mov word [Int05Off], Interrupt05
+  ; mov [Int05Seg], ax
+  mov word [Int06Off], Interrupt06
+  mov [Int06Seg], ax
+  mov word [Int07Off], Interrupt07
+  mov [Int07Seg], ax
+  mov [Int20Seg], ax
+  mov word [Int20Off], Interrupt20
+  mov [Int21Seg], ax
+  mov word [Int21Off], Interrupt21
+  mov [Int22Seg], ax
+  mov word [Int22Off], InterruptReturn
+  mov [Int23Seg], ax
+  mov word [Int23Off], InterruptReturn
+  mov [Int24Seg], ax
+  mov word [Int24Off], InterruptReturn
+  mov [Int25Seg], ax
+  mov word [Int25Off], InterruptReturn
+  mov [Int26Seg], ax
+  mov word [Int26Off], InterruptReturn
+  mov [Int27Seg], ax
+  mov word [Int27Off], InterruptReturn
+  mov [Int28Seg], ax
+  mov word [Int28Off], InterruptReturn
+  mov [Int29Seg], ax
+  mov word [Int29Off], InterruptReturn
+  mov [Int2ASeg], ax
+  mov word [Int2AOff], InterruptReturn
+  mov [Int2BSeg], ax
+  mov word [Int2BOff], InterruptReturn
+  mov [Int2CSeg], ax
+  mov word [Int2COff], InterruptReturn
+  mov [Int2DSeg], ax
+  mov word [Int2DOff], InterruptReturn
+  mov [Int2ESeg], ax
+  mov word [Int2EOff], InterruptReturn
+  mov [Int2FSeg], ax
+  mov word [Int2FOff], InterruptReturn
+  pop ax
+  ret
 
 Interrupt00:
   push ax
@@ -818,8 +844,14 @@ Interrupt02:
   push bp
   push si
   push di
+  xor ah, ah
+  in al, PORT_SYSTEM_CONTROL_B
+  push ax
+  in al, PORT_SYSTEM_CONTROL_A
+  push ax
   mov si, MessageNonMaskableInterrupt
-  call PrintString
+  call PrintFormatted
+  add sp, 4
   call HaltSystem
   pop di
   pop si
@@ -1178,6 +1210,42 @@ MemoryPrint:
   ret
 
 ;-------------------------------------------------------------------------------
+; NON-MASKABLE INTERRUPTS
+;-------------------------------------------------------------------------------
+
+PORT_RTC_INDEX  equ 0x70
+PORT_RTC_DATA   equ 0x71
+
+;
+; NmiMask
+;
+NmiMask:
+  push ax
+  mov al, 0x80
+  out PORT_RTC_INDEX, al
+  in al, PORT_RTC_DATA
+  pop ax
+  ret
+
+;
+; NmiUnmask
+;
+NmiUnmask:
+  push ax
+  mov al, 0x00
+  out PORT_RTC_INDEX, al
+  in al, PORT_RTC_DATA
+  pop ax
+  ret
+
+;-------------------------------------------------------------------------------
+; A20 GATE
+;-------------------------------------------------------------------------------
+
+A20Dump:
+  ret
+
+;-------------------------------------------------------------------------------
 ; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
 ;-------------------------------------------------------------------------------
 
@@ -1328,7 +1396,7 @@ MessagePicDump:
   db 'PIC STATUS [M] IRR=%b ISR=%b IMR=%b [S] IRR=%b ISR=%b IMR=%b',13,10,0
 
 ;-------------------------------------------------------------------------------
-; KEYBOARD CONTROLLER
+; KEYBOARD CONTROLLER (8042)
 ;-------------------------------------------------------------------------------
 
 PORT_KEYB_DATA    equ 0x60
@@ -1418,7 +1486,7 @@ MessageMemorySize:
   db '%d KiB conventional memory, %d KiB extended memory',13,10,0
 
 MessageNonMaskableInterrupt:
-  db 'NON-MASKABLE INTERRUPT',13,10,0
+  db 'NON-MASKABLE INTERRUPT (A = %b, B = %b)',13,10,0
 
 MessageNoCoprocessor:
   db 'NO COPROCESSOR',13,10,0
