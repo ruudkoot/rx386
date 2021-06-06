@@ -6,6 +6,9 @@
 [cpu 8086]
 [org 0x1000]
 
+PORT_WAIT equ 0x80
+%define IO_DELAY out PORT_WAIT, al
+
 ROOT_DIRECTORY_CLUSTER  equ 1
 
 DIRECTORY_ENTRY_NAME    equ 0x00
@@ -847,9 +850,9 @@ Interrupt02:
   push si
   push di
   xor ah, ah
-  in al, PORT_SYSTEM_CONTROL_B
-  push ax
   in al, PORT_SYSTEM_CONTROL_A
+  push ax
+  in al, PORT_SYSTEM_CONTROL_B
   push ax
   mov si, MessageNonMaskableInterrupt
   call PrintFormatted
@@ -1223,9 +1226,13 @@ PORT_RTC_DATA   equ 0x71
 ;
 NmiMask:
   push ax
+  pushf
+  cli
   mov al, 0x80
   out PORT_RTC_INDEX, al
+  IO_DELAY
   in al, PORT_RTC_DATA
+  popf
   pop ax
   ret
 
@@ -1234,9 +1241,13 @@ NmiMask:
 ;
 NmiUnmask:
   push ax
+  pushf
+  cli
   mov al, 0x00
   out PORT_RTC_INDEX, al
+  IO_DELAY
   in al, PORT_RTC_DATA
+  popf
   pop ax
   ret
 
@@ -1343,7 +1354,6 @@ PORT_PIC_MASTER_CMD       equ 0x20
 PORT_PIC_MASTER_DATA      equ 0x21
 PORT_PIC_SLAVE_CMD        equ 0xa0
 PORT_PIC_SLAVE_DATA       equ 0xa1
-PORT_WAIT                 equ 0x80
 
 PIC_CMD_AEOI_ROTATE       equ 0x00
 PIC_CMD_OCW3              equ 0x08
@@ -1398,7 +1408,7 @@ PicInitialize:
   mov al, PIC_CMD_ICW1 | PIC_ICW1_EDGE | PIC_ICW1_CASCADE | PIC_ICW1_NEED_ICW4
   out PORT_PIC_MASTER_CMD, al
   out PORT_PIC_SLAVE_CMD, al
-  out PORT_WAIT, al
+  IO_DELAY
 .icw2:
   mov al, bl
   test al, 0x07
@@ -1408,18 +1418,18 @@ PicInitialize:
   and al, 0x07
   jnz .invalid_base
   out PORT_PIC_SLAVE_DATA, al
-  out PORT_WAIT, al
+  IO_DELAY
 .icw3:
   mov al, PIC_ICW3_MASTER_IRQ2
   out PORT_PIC_MASTER_DATA, al
   mov al, PIC_ICW3_SLAVE_IRQ2
   out PORT_PIC_SLAVE_DATA, al
-  out PORT_WAIT, al
+  IO_DELAY
 .icw4:
   mov al, PIC_ICW4_8086_MODE | PIC_ICW4_MANUAL_EOI
   out PORT_PIC_MASTER_DATA, al
   out PORT_PIC_SLAVE_DATA, al
-  out PORT_WAIT, al
+  IO_DELAY
 .imr:
   mov al, 0xff
   out PORT_PIC_MASTER_DATA, al
@@ -1576,7 +1586,7 @@ MessageMemorySize:
   db '%d KiB conventional memory, %d KiB extended memory',13,10,0
 
 MessageNonMaskableInterrupt:
-  db 'NON-MASKABLE INTERRUPT (A = %b, B = %b)',13,10,0
+  db 'NON-MASKABLE INTERRUPT (B = %b, A = %b)',13,10,0
 
 MessageNoCoprocessor:
   db 'NO COPROCESSOR',13,10,0
