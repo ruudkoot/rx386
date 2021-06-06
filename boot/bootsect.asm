@@ -48,7 +48,7 @@ Main:
   call LocateBootSys
   call BootSysClusterToSector ; FIXME: no-op
   call LoadBootSys
-  jmp 0x0000:0x0700
+  jmp 0x0000:0x1000
 
 ;
 ; PrintBootMessage
@@ -201,7 +201,7 @@ BootSysClusterToSector:
 ;
 LoadBootSys:
   mov ax, [DataAreaSector]
-  mov bx, 0x0700
+  mov bx, 0x1000
   mov cx, [BootSysSize]
 .next:
   call LoadSector

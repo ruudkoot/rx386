@@ -11,7 +11,7 @@ ROOT_DIRECTORY_CLUSTER equ 1
   jmp Main
 
           db 0
-Signature db 'RX/386 KERNEL ',__UTC_DATE__,' ',__UTC_TIME__,13,10
+Signature db 13,10,'RX/386 KERNEL ',__UTC_DATE__,' ',__UTC_TIME__,13,10
 Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',13,10,0
 
 Main:

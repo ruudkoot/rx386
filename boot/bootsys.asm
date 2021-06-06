@@ -4,7 +4,7 @@
 
 [bits 16]
 [cpu 8086]
-[org 0x0700]
+[org 0x1000]
 
 ROOT_DIRECTORY_CLUSTER  equ 1
 
@@ -19,7 +19,7 @@ DIRECTORY_ENTRY_SIZE    equ 0x1c
   jmp 0000:Main
 
           db 0
-Signature db 'RX/386 BOOT LOADER ',__UTC_DATE__,' ',__UTC_TIME__,13,10
+Signature db 13,10,'RX/386 BOOT LOADER ',__UTC_DATE__,' ',__UTC_TIME__,13,10
 Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',13,10,0
 
 Main:
@@ -48,6 +48,38 @@ Main:
   mov [Int06Seg], ax
   mov word [Int07Off], Interrupt07
   mov [Int07Seg], ax
+  mov [Int20Seg], ax
+  mov word [Int20Off], Interrupt20
+  mov [Int21Seg], ax
+  mov word [Int21Off], InterruptReturn
+  mov [Int22Seg], ax
+  mov word [Int22Off], InterruptReturn
+  mov [Int23Seg], ax
+  mov word [Int23Off], InterruptReturn
+  mov [Int24Seg], ax
+  mov word [Int24Off], InterruptReturn
+  mov [Int25Seg], ax
+  mov word [Int25Off], InterruptReturn
+  mov [Int26Seg], ax
+  mov word [Int26Off], InterruptReturn
+  mov [Int27Seg], ax
+  mov word [Int27Off], InterruptReturn
+  mov [Int28Seg], ax
+  mov word [Int28Off], InterruptReturn
+  mov [Int29Seg], ax
+  mov word [Int29Off], InterruptReturn
+  mov [Int2ASeg], ax
+  mov word [Int2AOff], InterruptReturn
+  mov [Int2BSeg], ax
+  mov word [Int2BOff], InterruptReturn
+  mov [Int2CSeg], ax
+  mov word [Int2COff], InterruptReturn
+  mov [Int2DSeg], ax
+  mov word [Int2DOff], InterruptReturn
+  mov [Int2ESeg], ax
+  mov word [Int2EOff], InterruptReturn
+  mov [Int2FSeg], ax
+  mov word [Int2FOff], InterruptReturn
   sti
 .print_signature:
   mov si, Signature
@@ -79,6 +111,8 @@ Main:
   pop es
 .enter_protected_mode:
   cli
+  mov bx, 0x2820
+  call PicReinitialize
   mov ax, 0x1000
   mov ds, ax
   mov es, ax
@@ -823,6 +857,17 @@ Interrupt07:
   pop ax
   iret
 
+Interrupt20:
+  push ax
+  push ds
+  xor ax, ax
+  mov ds, ax
+  mov al, PIC_ACKNOWLEDGE
+  out PORT_PIC_MASTER_0, al
+  pop ds
+  pop ax
+  iret
+
 InterruptReturn:
   iret
 
@@ -1055,6 +1100,55 @@ MemoryPrint:
   ret
 
 ;-------------------------------------------------------------------------------
+; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
+;-------------------------------------------------------------------------------
+
+PORT_PIC_MASTER_0     equ 0x20
+PORT_PIC_MASTER_1     equ 0x21
+PORT_PIC_SLAVE_0      equ 0xa0
+PORT_PIC_SLAVE_1      equ 0xa1
+
+PIC_ACKNOWLEDGE       equ 0x20
+PIC_ICW1              equ 0x10
+PIC_ICW1_NEED_ICW4    equ 0x01
+PIC_ICW3_MASTER_IRQ2  equ 0x04
+PIC_ICW3_SLAVE_IRQ2   equ 0x02
+PIC_ICW4_8086_MODE    equ 0x01
+
+;
+; PicReinitialize
+;
+; Calling Registers:
+;
+;   BL = master interrupt base
+;   BH = slave interrupt base
+;
+PicReinitialize:
+  push ax
+  ; ICW1
+  mov al, PIC_ICW1 | PIC_ICW1_NEED_ICW4
+  out PORT_PIC_MASTER_0, al
+  out PORT_PIC_SLAVE_0, al
+  ; ICW2
+  mov al, bl
+  and al, 0xf8
+  out PORT_PIC_MASTER_1, al
+  mov al, bh
+  and al, 0xf8
+  out PORT_PIC_SLAVE_1, al
+  ; ICW3
+  mov al, PIC_ICW3_MASTER_IRQ2
+  out PORT_PIC_MASTER_1, al
+  mov al, PIC_ICW3_SLAVE_IRQ2
+  out PORT_PIC_SLAVE_1, al
+  ; ICW4
+  mov al, PIC_ICW4_8086_MODE
+  out PORT_PIC_MASTER_1, al
+  out PORT_PIC_SLAVE_1, al
+  pop ax
+  ret
+
+;-------------------------------------------------------------------------------
 ; DATA
 ;-------------------------------------------------------------------------------
 
@@ -1121,6 +1215,9 @@ MessageDivisionByZero:
 
 MessageFatParameters:
   db '%d Sectors/Cluster, FAT @ %d, Root Directory @ %d, Data Area @ %d',13,10,0
+
+MessageIrqTimer:
+  db 'TICK!',13,10,0
 
 MessageKernelSysFile:
   db 'KERNEL.SYS: Sectors = %d, Size = %d, Sector = %d, Cluster = %d',13,10,0
@@ -1190,7 +1287,87 @@ absolute 0x0000
   Int06Seg resw 1
   Int07Off resw 1
   Int07Seg resw 1
-  InterruptVectors resd (256-8)
+  Int08Off resw 1
+  Int08Seg resw 1
+  Int09Off resw 1
+  Int09Seg resw 1
+  Int0AOff resw 1
+  Int0ASeg resw 1
+  Int0BOff resw 1
+  Int0BSeg resw 1
+  Int0COff resw 1
+  Int0CSeg resw 1
+  Int0DOff resw 1
+  Int0DSeg resw 1
+  Int0EOff resw 1
+  Int0ESeg resw 1
+  Int0FOff resw 1
+  Int0FSeg resw 1
+  Int10Off resw 1
+  Int10Seg resw 1
+  Int11Off resw 1
+  Int11Seg resw 1
+  Int12Off resw 1
+  Int12Seg resw 1
+  Int13Off resw 1
+  Int13Seg resw 1
+  Int14Off resw 1
+  Int14Seg resw 1
+  Int15Off resw 1
+  Int15Seg resw 1
+  Int16Off resw 1
+  Int16Seg resw 1
+  Int17Off resw 1
+  Int17Seg resw 1
+  Int18Off resw 1
+  Int18Seg resw 1
+  Int19Off resw 1
+  Int19Seg resw 1
+  Int1AOff resw 1
+  Int1ASeg resw 1
+  Int1BOff resw 1
+  Int1BSeg resw 1
+  Int1COff resw 1
+  Int1CSeg resw 1
+  Int1DOff resw 1
+  Int1DSeg resw 1
+  Int1EOff resw 1
+  Int1ESeg resw 1
+  Int1FOff resw 1
+  Int1FSeg resw 1
+  Int20Off resw 1
+  Int20Seg resw 1
+  Int21Off resw 1
+  Int21Seg resw 1
+  Int22Off resw 1
+  Int22Seg resw 1
+  Int23Off resw 1
+  Int23Seg resw 1
+  Int24Off resw 1
+  Int24Seg resw 1
+  Int25Off resw 1
+  Int25Seg resw 1
+  Int26Off resw 1
+  Int26Seg resw 1
+  Int27Off resw 1
+  Int27Seg resw 1
+  Int28Off resw 1
+  Int28Seg resw 1
+  Int29Off resw 1
+  Int29Seg resw 1
+  Int2AOff resw 1
+  Int2ASeg resw 1
+  Int2BOff resw 1
+  Int2BSeg resw 1
+  Int2COff resw 1
+  Int2CSeg resw 1
+  Int2DOff resw 1
+  Int2DSeg resw 1
+  Int2EOff resw 1
+  Int2ESeg resw 1
+  Int2FOff resw 1
+  Int2FSeg resw 1
+  InterruptVectors resd (256-48)
   BiosDataArea resb 256
   DosCommunicationArea resb 256
 
