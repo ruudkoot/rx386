@@ -19,6 +19,18 @@ DIRECTORY_ENTRY_DATE    equ 0x18
 DIRECTORY_ENTRY_CLUSTER equ 0x1a
 DIRECTORY_ENTRY_SIZE    equ 0x1c
 
+CR0_PE                  equ 0x00000001
+CR0_MP                  equ 0x00000002
+CR0_EM                  equ 0x00000004
+CR0_TS                  equ 0x00000008
+CR0_ET                  equ 0x00000010
+CR0_NE                  equ 0x00000020
+CR0_WP                  equ 0x00010020
+CR0_AM                  equ 0x00040000
+CR0_NW                  equ 0x20000000
+CR0_CD                  equ 0x40000000
+CR0_PG                  equ 0x80000000
+
   jmp 0000:Main
 
           db 0
@@ -54,20 +66,41 @@ Main:
 .load_kernel:
   call KernelLoad
   call FloppyMotorOff
-.enter_protected_mode:
+.prepare_for_protected_mode:
   cli
-  call NmiMask
   mov bx, 0x2820
   call A20Dump
   call A20Enable
   call A20Test
+  call NmiMask
   call PicInitialize
-  mov ax, 0x1000
+.enter_protected_mode:
+[cpu 386]
+  lgdt [GDT_Register]
+  mov eax, cr0
+  or eax, 0x00000001
+  mov cr0, eax
+  jmp DESCRIPTOR_CODE0:.in_protected_mode_32
+.in_protected_mode_32:
+[bits 32]
+  mov ax, DESCRIPTOR_DATA0
   mov ds, ax
   mov es, ax
+  mov fs, ax
+  mov gs, ax
   mov ss, ax
-  xor sp, sp
-  jmp 0x1000:0x0000
+  mov esp, 0x00010000
+.enable_paging:
+  call PageTableSetup
+  mov eax, PageDirectory
+  mov cr3, eax
+  mov eax, cr0
+  or eax, CR0_PG
+  mov cr0, eax
+  mov esp, 0x80010000
+  jmp DESCRIPTOR_CODE0:0x80010000
+[bits 16]
+[cpu 8086]
 .done:
   call HaltSystem
 
@@ -1503,6 +1536,52 @@ PORT_KEYB_DATA    equ 0x60
 PORT_KEYB_CONTROL equ 0x64
 
 ;-------------------------------------------------------------------------------
+; PAGING
+;-------------------------------------------------------------------------------
+
+PAGE_PRESENT    equ 0x001
+PAGE_RW         equ 0x002
+PAGE_USER       equ 0x004
+PAGE_ACCESSED   equ 0x020
+PAGE_DIRTY      equ 0x040
+
+[cpu 386]
+[bits 32]
+
+;
+; PageTableSetup
+;
+PageTableSetup:
+  pusha
+.page_directory:
+  xor eax, eax
+  mov ecx, 1024
+.page_directory_loop:
+  mov [PageDirectory+4*ecx-4], eax
+  loop .page_directory_loop
+.page_directory_fill:
+  mov eax, PageTable0
+  or eax, PAGE_PRESENT | PAGE_RW
+  mov [PageDirectory], eax
+  mov eax, PageTable8
+  or eax, PAGE_PRESENT | PAGE_RW
+  mov [PageDirectory+4*512], eax
+.page_table:
+  mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW
+  mov ecx, 1024
+.page_table_loop:
+  mov [PageTable0+4*ecx-4], eax
+  mov [PageTable8+4*ecx-4], eax
+  sub eax, 0x00001000
+  loop .page_table_loop
+.epilogue:
+  popa
+  ret
+
+[bits 16]
+[cpu 8086]
+
+;-------------------------------------------------------------------------------
 ; DATA
 ;-------------------------------------------------------------------------------
 
@@ -1517,6 +1596,42 @@ FileNameKernelSys:
 
 HexDigits:
   db '0123456789ABCDEF'
+
+;-------------------------------------------------------------------------------
+; DESCRIPTOR TABLES
+;-------------------------------------------------------------------------------
+
+DESCRIPTOR_NULL   equ GDT.null - GDT.start
+DESCRIPTOR_CODE0  equ GDT.code0 - GDT.start
+DESCRIPTOR_DATA0  equ GDT.data0 - GDT.start
+
+align 8
+GDT:
+.start:
+.null:
+  dd 0
+  dd 0
+.code0:
+  dw 0xffff
+  dw 0
+  db 0
+  db 10011010b
+  db 11001111b
+  db 0
+.data0:
+  dw 0xffff
+  dw 0
+  db 0
+  db 10010010b
+  db 11001111b
+  db 0
+.end:
+
+GDT_Register:
+.limit:
+  dw GDT.end - GDT.start - 1
+.base:
+  dd GDT
 
 ;-------------------------------------------------------------------------------
 ; MESSAGES
@@ -1625,6 +1740,11 @@ section .bss
   DirectoryTotalEntries resw 1
   DirectoryCurrentEntry resw 1
   FileCurrentSector resw 1
+
+align 4096,resb 1
+  PageDirectory resd 1024
+  PageTable0    resd 1024
+  PageTable8    resd 1024
 
 ;-------------------------------------------------------------------------------
 ; ABSOLUTE
