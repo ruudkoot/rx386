@@ -39,6 +39,28 @@ CONSOLE_COLS        equ 80
 CONSOLE_ROWS        equ 25
 CONSOLE_TABS        equ 8
 
+PORT_CRTC_INDEX  equ 0x3d4
+PORT_CRTC_DATA   equ 0x3d5
+
+CRTC_HORIZONTAL_TOTAL         equ 0
+CRTC_HORIZONTAL_DISPLAYED     equ 1
+CRTC_H_SYNC_POSITION          equ 2
+CRTC_SYNC_WIDTH               equ 3
+CRTC_VERTICAL_TOTAL           equ 4
+CRTC_V_TOTAL_ADJUST           equ 5
+CRTC_VERTICAL_DISPLAYED       equ 6
+CRTC_V_SYNC_POSITION          equ 7
+CRTC_INTERLACE_MODE_AND_SKEW  equ 8
+CRTC_MAX_SCAN_LINE_ADDRESS    equ 9
+CRTC_CURSOR_START             equ 10
+CRTC_CURSOR_END               equ 11
+CRTC_START_ADDRESS_HIGH       equ 12
+CRTC_START_ADDRESS_LOW        equ 13
+CRTC_CURSOR_HIGH              equ 14
+CRTC_CURSOR_LOW               equ 15
+CRTC_LIGHT_PEN_HIGH           equ 16
+CRTC_LIGHT_PEN_LOW            equ 17
+
 section .text
 
 ;
@@ -91,9 +113,8 @@ ConsoleOut:
   xor esi, esi
   jmp .update_cursor
 .normal_char:
-  mov eax, edi
-  mov ecx, CONSOLE_COLS
-  mul ecx
+  mov eax, CONSOLE_COLS
+  mul edi
   add eax, esi
   mov [CONSOLE_FRAMEBUFFER+2*eax], bl
   inc esi
@@ -118,7 +139,22 @@ ConsoleOut:
 .update_cursor:
   mov [ConsoleCursorCol], esi
   mov [ConsoleCursorRow], edi
-  ; FIXME: move hardware cursor
+  mov eax, CONSOLE_COLS
+  mul edi
+  add eax, esi
+  mov ecx, eax
+  mov dx, PORT_CRTC_INDEX
+  mov al, CRTC_CURSOR_HIGH
+  out dx, al
+  mov dx, PORT_CRTC_DATA
+  mov al, ch
+  out dx, al
+  mov dx, PORT_CRTC_INDEX
+  mov al, CRTC_CURSOR_LOW
+  out dx, al
+  mov dx, PORT_CRTC_DATA
+  mov al, cl
+  out dx, al
 .epilogue:
   popa
   ret
