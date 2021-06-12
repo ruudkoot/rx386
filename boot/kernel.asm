@@ -159,6 +159,24 @@ ConsoleOut:
   popa
   ret
 
+section .data
+
+ConsoleCursorCol  dd 0
+ConsoleCursorRow  dd 24
+ConsoleAttr       dd 0x07
+
+;-------------------------------------------------------------------------------
+; STANDARD I/O
+;-------------------------------------------------------------------------------
+
+PRINTF_FLAG_LEFTJUSTIFY equ 1
+PRINTF_FLAG_FORCESIGN   equ 2
+PRINTF_FLAG_PADSIGN     equ 4
+PRINTF_FLAG_BASEPREFIX  equ 8
+PRINTF_FLAG_LEFTPADZERO equ 16
+
+section .text
+
 ;
 ; PrintString
 ;
@@ -177,8 +195,68 @@ PrintString:
   popa
   ret
 
+;
+; PrintFormatted
+;
+;   ESI = zero-terminated string
+;
+; State machine:
+;
+;   0 = normal characted
+;   1 = in format specifier
+;
+PrintFormatted:
+  pusha
+  mov ebp, esp
+  sub esp, 20
+  mov dword [ebp], 0    ; STATE
+  mov dword [ebp-4], 0  ; FLAGS
+  mov dword [ebp-8], 0  ; WIDTH
+  mov dword [ebp-12], 0 ; PRECISION
+  mov dword [ebp-16], 0 ; PARAM
+.loop_start:
+  mov al, [esi]
+  inc esi
+  or al, al
+  jz .loop_exit
+  mov ebx, [ebp] ; STATE
+  or ebx, ebx
+  jnz .in_format_specifier
+  cmp al, '%'
+  jz .is_format_specifier
+.print_literal:
+  call ConsoleOut
+  jmp .loop_start
+.is_format_specifier:
+  inc dword [ebp] ; STATE
+  jmp .loop_start
+.in_format_specifier:
+  mov dword [ebp], 0 ; STATE
+  cmp al, '%'
+  jz .print_literal
+  cmp al, 'h'
+  jz .print_h
+  jmp .loop_start
+.print_h:
+  mov ebx, [ebp-16] ; PARAM
+  inc dword [ebp-16]
+  mov edx, [ebp+4*ebx+36]
+  mov ebx, HexDigits
+  mov cl, 28
+.print_h_loop_start:
+  mov eax, edx
+  shr eax, cl
+  and al, 0xf
+  xlat
+  call ConsoleOut
+  sub cl, 4
+  jc .loop_start
+  jmp .print_h_loop_start
+.loop_exit:
+  add esp, 20
+  popa
+  ret
+
 section .data
 
-ConsoleCursorCol  dd 0
-ConsoleCursorRow  dd 24
-ConsoleAttr       dd 0x07
+HexDigits db '0123456789ABCDEF'
