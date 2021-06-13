@@ -2,12 +2,18 @@
 ; KERNEL.SYS
 ;
 
-[bits 32]
-[cpu 386]
-[org 0x80010000]
+KERNEL_BASE equ 0x80010000
+
+%define LOW_WORD(lbl) ((lbl - KERNEL_START + KERNEL_BASE) & 0xffff)
+%define HIGH_WORD(lbl) (((lbl - KERNEL_START + KERNEL_BASE) >> 16) & 0xffff)
+
+cpu   386
+bits  32
+org   KERNEL_BASE
 
 section .text
 
+KERNEL_START:
   jmp Main
 
           db 0
@@ -17,8 +23,710 @@ Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',CR,LF,0
 Main:
   mov esi, Signature
   call PrintString
+  lidt [IDTR]
+  jmp HaltSystem
+
+;-------------------------------------------------------------------------------
+; SEGMENTS
+;-------------------------------------------------------------------------------
+
+;SELECTOR_NULL   equ GDT.null - GDT.start
+;SELECTOR_CODE0  equ GDT.code0 - GDT.start
+;SELECTOR_DATA0  equ GDT.data0 - GDT.start
+
+SELECTOR_NULL   equ 0x0000
+SELECTOR_CODE0  equ 0x0008
+SELECTOR_DATA0  equ 0x0010
+
+;-------------------------------------------------------------------------------
+; INTERRUPTS
+;-------------------------------------------------------------------------------
+
+section .text
+
+; Fault
+align 4
+ExceptionDE:
+  jmp HaltSystem
+
+; Fault or Trap
+align 4
+ExceptionDB:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+InterruptNMI:
+  mov esi, MessageInterruptNMI
+  call PrintString
+  jmp HaltSystem
+
+; Trap
+align 4
+ExceptionBP:
+  jmp HaltSystem
+
+; Trap
+align 4
+ExceptionOF:
+  jmp HaltSystem
+
+; Fault
+align 4
+ExceptionBR:
+  jmp HaltSystem
+
+; Fault
+align 4
+ExceptionUD:
+  jmp HaltSystem
+
+; Fault
+align 4
+ExceptionNM:
+  jmp HaltSystem
+
+; Abort with Error Code
+align 4
+ExceptionDF:
+  jmp HaltSystem
+
+; Fault
+; (287 & 387 only)
+align 4
+ExceptionCSO:
+  jmp HaltSystem
+
+; Fault with Error Code
+align 4
+ExceptionTS:
+  jmp HaltSystem
+
+; Fault with Error Code
+align 4
+ExceptionNP:
+  jmp HaltSystem
+
+; Fault with Error Code
+align 4
+ExceptionSS:
+  jmp HaltSystem
+
+; Fault with Error Code
+align 4
+ExceptionGP:
+  jmp HaltSystem
+
+; Fault with Error Code
+align 4
+ExceptionPF:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception0F:
+  jmp HaltSystem
+
+; Fault
+align 4
+ExceptionMF:
+  jmp HaltSystem
+
+; Fault with Error Code
+align 4
+ExceptionAC:
+  jmp HaltSystem
+
+; Abort
+align 4
+ExceptionMC:
+  jmp HaltSystem
+
+; Fault
+align 4
+ExceptionXM:
+  jmp HaltSystem
+
+; Fault
+align 4
+ExceptionVE:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception15:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception16:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception17:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception18:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception19:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception1A:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception1B:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception1C:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception1D:
+  jmp HaltSystem
+
+; Unknown with Error Code
+align 4
+ExceptionSX:
+  jmp HaltSystem
+
+; Reserved
+align 4
+Exception1F:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ0:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ1:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ2:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ3:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ4:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ5:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ6:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ7:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ8:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ9:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ10:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ11:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ12:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ13:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ14:
+  jmp HaltSystem
+
+; Interrupt
+align 4
+IRQ15:
+  jmp HaltSystem
+
+section .data
+
+ID_GATETYPE_TASK32  equ 0x05
+ID_GATETYPE_INTR16  equ 0x06
+ID_GATETYPE_TRAP16  equ 0x07
+ID_GATETYPE_INTR32  equ 0x0E
+ID_GATETYPE_TRAP32  equ 0x0F
+ID_STORAGE_SEGMENT  equ 0x10
+ID_DPL0             equ 0x00
+ID_DPL1             equ 0x20
+ID_DPL2             equ 0x40
+ID_DPL3             equ 0x60
+ID_PRESENT          equ 0x80
+
+align 8
+IDT:
+.start:
+.exception_de:
+  dw LOW_WORD(ExceptionDE)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionDE)
+.exception_db:
+  dw LOW_WORD(ExceptionDB)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionDB)
+.interrupt_nmi:
+  dw LOW_WORD(InterruptNMI)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(InterruptNMI)
+.exception_bp:
+  dw LOW_WORD(ExceptionBP)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionBP)
+.exception_of:
+  dw LOW_WORD(ExceptionOF)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionOF)
+.exception_br:
+  dw LOW_WORD(ExceptionBR)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionBR)
+.exception_ud:
+  dw LOW_WORD(ExceptionUD)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionUD)
+.exception_nm:
+  dw LOW_WORD(ExceptionNM)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionNM)
+.exception_df:
+  dw LOW_WORD(ExceptionDF)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionDF)
+.exception_cso:
+  dw LOW_WORD(ExceptionCSO)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionCSO)
+.exception_ts:
+  dw LOW_WORD(ExceptionTS)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionTS)
+.exception_np:
+  dw LOW_WORD(ExceptionNP)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionNP)
+.exception_ss:
+  dw LOW_WORD(ExceptionSS)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionSS)
+.exception_gp:
+  dw LOW_WORD(ExceptionGP)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionGP)
+.exception_pf:
+  dw LOW_WORD(ExceptionPF)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionPF)
+.exception_0f:
+  dw LOW_WORD(Exception0F)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception0F)
+.exception_mf:
+  dw LOW_WORD(ExceptionMF)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionMF)
+.exception_ac:
+  dw LOW_WORD(ExceptionAC)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionAC)
+.exception_mc:
+  dw LOW_WORD(ExceptionMC)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionMC)
+.exception_xm:
+  dw LOW_WORD(ExceptionXM)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionXM)
+.exception_ve:
+  dw LOW_WORD(ExceptionVE)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionVE)
+.exception_15:
+  dw LOW_WORD(Exception15)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception15)
+.exception_16:
+  dw LOW_WORD(Exception16)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception16)
+.exception_17:
+  dw LOW_WORD(Exception17)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception17)
+.exception_18:
+  dw LOW_WORD(Exception18)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception18)
+.exception_19:
+  dw LOW_WORD(Exception19)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception19)
+.exception_1a:
+  dw LOW_WORD(Exception1A)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception1A)
+.exception_1b:
+  dw LOW_WORD(Exception1B)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception1B)
+.exception_1c:
+  dw LOW_WORD(Exception1C)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception1C)
+.exception_1d:
+  dw LOW_WORD(Exception1D)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception1D)
+.exception_sx:
+  dw LOW_WORD(ExceptionSX)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(ExceptionSX)
+.exception_1f:
+  dw LOW_WORD(Exception1F)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(Exception1F)
+.irq0:
+  dw LOW_WORD(IRQ0)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ0)
+.irq1:
+  dw LOW_WORD(IRQ1)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ1)
+.irq2:
+  dw LOW_WORD(IRQ2)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ2)
+.irq3:
+  dw LOW_WORD(IRQ3)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ3)
+.irq4:
+  dw LOW_WORD(IRQ4)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ4)
+.irq5:
+  dw LOW_WORD(IRQ5)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ5)
+.irq6:
+  dw LOW_WORD(IRQ6)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ6)
+.irq7:
+  dw LOW_WORD(IRQ7)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ7)
+.irq8:
+  dw LOW_WORD(IRQ8)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ8)
+.irq9:
+  dw LOW_WORD(IRQ9)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ9)
+.irq10:
+  dw LOW_WORD(IRQ10)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ10)
+.irq11:
+  dw LOW_WORD(IRQ11)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ11)
+.irq12:
+  dw LOW_WORD(IRQ12)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ12)
+.irq13:
+  dw LOW_WORD(IRQ13)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ13)
+.irq14:
+  dw LOW_WORD(IRQ14)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ14)
+.irq15:
+  dw LOW_WORD(IRQ15)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+  dw HIGH_WORD(IRQ15)
+.end:
+
+IDTR:
+.limit:
+  dw (IDT.end - IDT.start - 1)
+.base:
+  dd IDT
+
+MessageExceptionDE:
+  db 'Divide-by-zero Error (#DE)',0
+
+MessageExceptionDB:
+  db 'Debug (#DB)',0
+
+MessageInterruptNMI:
+  db 'Non-maskable interrupt',0
+
+MessageExceptionBP:
+  db 'Breakpoint (#BP)',0
+
+MessageExceptionOF:
+  db 'Overflow (#OF)',0
+
+MessageExceptionBR:
+  db 'Bound Range Exceeded (#BR)',0
+
+MessageExceptionUD:
+  db 'Invalid Opcode (#UD)',0
+
+MessageExceptionNM:
+  db 'Device Not Available (#NM)',0
+
+MessageExceptionDF:
+  db 'Double Fault (#DF)',0
+
+MessageExceptionCSO:
+  db 'Coprocessor Segment Overrun',0
+
+MessageExceptionTS:
+  db 'Invalid TSS (#TS)',0
+
+MessageExceptionNP:
+  db 'Segment Not Present (#NP)',0
+
+MessageExceptionSS:
+  db 'Stack-Segment Fault (#SS)',0
+
+MessageExceptionGP:
+  db 'General Protection Fault (#GP)',0
+
+MessageExceptionPF:
+  db 'Page Fault (#PF)',0
+
+MessageException0F:
+  db 'Unknown Exception (0Fh)',0
+
+MessageExceptionMF:
+  db 'x87 Floating-Point Exception (#MF)',0
+
+MessageExceptionAC:
+  db 'Alignment Check (#AC)',0
+
+MessageExceptionMC:
+  db 'Machine Check (#MC)',0
+
+MessageExceptionXM:
+  db 'SIMD Floating-Point Exception (#XM)',0
+
+MessageExceptionVE:
+  db 'Virtualization Exception (#VE)',0
+
+; FIXME: Control Protection Exception
+MessageException15:
+  db 'Unknown Exception (15h)',0
+
+MessageException16:
+  db 'Unknown Exception (16h)',0
+
+MessageException17:
+  db 'Unknown Exception (17h)',0
+
+MessageException18:
+  db 'Unknown Exception (18h)',0
+
+MessageException19:
+  db 'Unknown Exception (19h)',0
+
+MessageException1A:
+  db 'Unknown Exception (1Ah)',0
+
+MessageException1B:
+  db 'Unknown Exception (1Bh)',0
+
+MessageException1C:
+  db 'Unknown Exception (1Ch)',0
+
+MessageException1D:
+  db 'Unknown Exception (1Dh)',0
+
+MessageExceptionSX:
+  db 'Security Exception (#SE)',0
+
+MessageException1F:
+  db 'Unknown Exception (1Fh)',0
+
+;-------------------------------------------------------------------------------
+; PANIC
+;-------------------------------------------------------------------------------
+
+section .text
+
+;
+; HaltSystem
+;
+; To do:
+;
+;   - Disable NMI?
+;
+HaltSystem:
+  mov esi, MessageSystemHalted
+  call PrintString
   cli
   hlt
+  jmp HaltSystem
+
+;
+; Panic
+;
+Panic:
+  jmp HaltSystem
+
+section .data
+
+MessageSystemHalted:
+  db 'SYSTEM HALTED!',13,10,0
 
 ;-------------------------------------------------------------------------------
 ; CONSOLE
