@@ -14,29 +14,111 @@ org   KERNEL_BASE
 section .text
 
 KERNEL_START:
-  jmp Main
+  jmp Main0
 
           db 0
 Signature db CR,LF,'RX/386 KERNEL ',__UTC_DATE__,' ',__UTC_TIME__,CR,LF
 Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',CR,LF,0
 
-Main:
+Main0:
   mov esi, Signature
   call PrintString
+  lgdt [GDTR]
   lidt [IDTR]
+  jmp SELECTOR_CODE0:Main1
+Main1:
+  mov eax, SELECTOR_DATA0
+  mov ds, eax
+  mov es, eax
+  mov fs, eax
+  mov gs, eax
+  mov ss, eax
   jmp HaltSystem
 
 ;-------------------------------------------------------------------------------
 ; SEGMENTS
 ;-------------------------------------------------------------------------------
 
-;SELECTOR_NULL   equ GDT.null - GDT.start
-;SELECTOR_CODE0  equ GDT.code0 - GDT.start
-;SELECTOR_DATA0  equ GDT.data0 - GDT.start
+SD_TYPE_SYSTEM        equ 0x00
+SD_TYPE_DATA          equ 0x10
+SD_TYPE_CODE          equ 0x18
+SD_DATA_WRITABLE      equ 0x02
+SD_DATA_GROWDOWN      equ 0x04
+SD_CODE_READABLE      equ 0x02
+SD_CODE_CONFORMING    equ 0x04
+SD_ACCESSED           equ 0x01
+SD_DPL0               equ 0x00
+SD_DPL1               equ 0x20
+SD_DPL2               equ 0x40
+SD_DPL3               equ 0x60
+SD_NOTPRESENT         equ 0x00
+SD_PRESENT            equ 0x80
 
-SELECTOR_NULL   equ 0x0000
-SELECTOR_CODE0  equ 0x0008
-SELECTOR_DATA0  equ 0x0010
+SD_SIZE_16BIT         equ 0x00
+SD_SIZE_32BIT         equ 0x40
+SD_GRANULARITY_BYTE   equ 0x00
+SD_GRANULARITY_PAGE   equ 0x80
+
+SELECTOR_NULL         equ GDT.selector_null  - GDT.start
+SELECTOR_DATA0        equ GDT.selector_data0 - GDT.start
+SELECTOR_CODE0        equ GDT.selector_code0 - GDT.start
+SELECTOR_DATA3        equ GDT.selector_data3 - GDT.start
+SELECTOR_CODE3        equ GDT.selector_code3 - GDT.start
+
+section .data
+
+align 8
+GDT:
+.start:
+.selector_null:
+  dw 0x0000
+  dw 0x0000
+  db 0x00
+  db SD_NOTPRESENT
+  db 0x00
+  db 0x00
+.selector_null2:
+  dw 0x0000
+  dw 0x0000
+  db 0x00
+  db SD_NOTPRESENT
+  db 0x00
+  db 0x00
+.selector_data0:
+  dw 0xffff
+  dw 0x0000
+  db 0x00
+  db SD_TYPE_DATA | SD_DATA_WRITABLE | SD_DPL0 | SD_PRESENT
+  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
+  db 0x00
+.selector_code0:
+  dw 0xffff
+  dw 0x0000
+  db 0x00
+  db SD_TYPE_CODE | SD_CODE_READABLE | SD_DPL0 | SD_PRESENT
+  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
+  db 0x00
+.selector_data3:
+  dw 0xffff
+  dw 0x0000
+  db 0x00
+  db SD_TYPE_DATA | SD_DATA_WRITABLE | SD_DPL3 | SD_PRESENT
+  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
+  db 0x00
+.selector_code3:
+  dw 0xffff
+  dw 0x0000
+  db 0x00
+  db SD_TYPE_CODE | SD_CODE_READABLE | SD_DPL3 | SD_PRESENT
+  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
+  db 0x00
+.end:
+
+GDTR:
+.limit:
+  dw (GDT.end - GDT.start - 1)
+.base:
+  dd GDT
 
 ;-------------------------------------------------------------------------------
 ; INTERRUPTS
