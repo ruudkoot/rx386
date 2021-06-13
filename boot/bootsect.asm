@@ -2,17 +2,20 @@
 ; Boot sector for FAT12 floppy disks.
 ;
 
-[bits 16]
-[cpu 8086]
-[org 0x7c00]
+BOOTSECT_BASE equ 0x7c00
 
-  jmp Main
-  nop
+cpu   8086
+bits  16
+org   BOOTSECT_BASE
+
+BOOTSECT_START:
+  cli
+  jmp Main0
 
 ;
 ; BIOS Parameter Block
 ;
-SystemName            db 'RX386   '
+SystemName            db 'RUUDKOOT'
 BytesPerSector        dw 512
 SectorsPerCluster     db 1
 ReservedSectors       dw 1
@@ -28,18 +31,24 @@ TotalNumberOfSectors2 dd 0
 PhysicalUnit          db 0
 Reserved              db 0
 MagicNumber           db 0x29
-VolumeSerialNumber    dd 0xDEADC0DE
+VolumeSerialNumber    dd __POSIX_TIME__
 VolumeLabel           db 'RX/386 BOOT'
 FileSystem            db 'FAT12   '
 
 ;
 ; Locate BOOT.SYS and load it into memory.
 ;
-Main:
-  mov [PhysicalUnit], dl
+Main0:
+  jmp 0x0000:Main1
+Main1:
   xor ax, ax
   mov ds, ax
   mov es, ax
+  mov ss, ax
+  mov sp, 0x8000
+  mov [PhysicalUnit], dl
+  sti
+Main2:
   call PrintBootMessage
   call ComputeSectorsPerCylinder
   call ComputeRootDirectorySector

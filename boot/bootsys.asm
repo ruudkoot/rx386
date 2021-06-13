@@ -2,9 +2,11 @@
 ; BOOT.SYS
 ;
 
-[bits 16]
-[cpu 8086]
-[org 0x1000]
+BOOTSYS_BASE equ 0x1000
+
+cpu   8086
+bits  16
+org   BOOTSYS_BASE
 
 PORT_WAIT equ 0x80
 %define IO_DELAY out PORT_WAIT, al
@@ -31,6 +33,7 @@ CR0_NW                  equ 0x20000000
 CR0_CD                  equ 0x40000000
 CR0_PG                  equ 0x80000000
 
+BOOTSYS_START:
   jmp 0000:Main
 
           db 0
@@ -80,10 +83,10 @@ Main:
   mov eax, cr0
   or eax, 0x00000001
   mov cr0, eax
-  jmp DESCRIPTOR_CODE0:.in_protected_mode_32
+  jmp SELECTOR_CODE0:.in_protected_mode_32
 .in_protected_mode_32:
 [bits 32]
-  mov ax, DESCRIPTOR_DATA0
+  mov ax, SELECTOR_DATA0
   mov ds, ax
   mov es, ax
   mov fs, ax
@@ -98,7 +101,7 @@ Main:
   or eax, CR0_PG
   mov cr0, eax
   mov esp, 0x80010000
-  jmp DESCRIPTOR_CODE0:0x80010000
+  jmp SELECTOR_CODE0:0x80010000
 [bits 16]
 [cpu 8086]
 .done:
@@ -1601,9 +1604,9 @@ HexDigits:
 ; DESCRIPTOR TABLES
 ;-------------------------------------------------------------------------------
 
-DESCRIPTOR_NULL   equ GDT.null - GDT.start
-DESCRIPTOR_CODE0  equ GDT.code0 - GDT.start
-DESCRIPTOR_DATA0  equ GDT.data0 - GDT.start
+SELECTOR_NULL   equ GDT.null - GDT.start
+SELECTOR_CODE0  equ GDT.code0 - GDT.start
+SELECTOR_DATA0  equ GDT.data0 - GDT.start
 
 align 8
 GDT:
