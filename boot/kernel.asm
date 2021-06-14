@@ -33,6 +33,14 @@ Main1:
   mov fs, eax
   mov gs, eax
   mov ss, eax
+Main2:
+  ;call TestExceptionDE
+  ;call TestExceptionDB_1
+  ;call TestExceptionDB_2
+  ;call TestInterruptNMI
+  call TestExceptionGP
+  ;call TestExceptionPF
+Main3:
   jmp HaltSystem
 
 ;-------------------------------------------------------------------------------
@@ -129,245 +137,636 @@ section .text
 ; Fault
 align 4
 ExceptionDE:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionDE
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault or Trap
 align 4
 ExceptionDB:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionDB
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 InterruptNMI:
+  cli
+  pusha
+.body:
   mov esi, MessageInterruptNMI
-  call PrintString
-  jmp HaltSystem
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Trap
 align 4
 ExceptionBP:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionBP
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Trap
 align 4
 ExceptionOF:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionOF
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault
 align 4
 ExceptionBR:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionBR
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault
 align 4
 ExceptionUD:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionUD
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault
 align 4
 ExceptionNM:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionNM
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Abort with Error Code
 align 4
 ExceptionDF:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionDF
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Fault
 ; (287 & 387 only)
 align 4
 ExceptionCSO:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionCSO
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault with Error Code
 align 4
 ExceptionTS:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionTS
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Fault with Error Code
 align 4
 ExceptionNP:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionNP
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Fault with Error Code
 align 4
 ExceptionSS:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionSS
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Fault with Error Code
 align 4
 ExceptionGP:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov ebp, esp
+  mov esi, MessageExceptionGP
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Fault with Error Code
 align 4
 ExceptionPF:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionPF
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Reserved
 align 4
 Exception0F:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException0F
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault
 align 4
 ExceptionMF:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionMF
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault with Error Code
 align 4
 ExceptionAC:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionAC
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Abort
 align 4
 ExceptionMC:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionMC
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault
 align 4
 ExceptionXM:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionXM
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Fault
 align 4
 ExceptionVE:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionVE
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception15:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException15
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception16:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException16
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception17:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException17
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception18:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException18
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception19:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException19
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception1A:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException1A
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception1B:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException1B
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception1C:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException1C
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Reserved
 align 4
 Exception1D:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException1D
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Unknown with Error Code
 align 4
 ExceptionSX:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageExceptionSX
+  mov eax, [ebp+32] ; Error Code
+  jmp Panic
+.epilogue:
+  popa
+  add esp, 4
+  iret
 
 ; Reserved
 align 4
 Exception1F:
-  jmp HaltSystem
+  cli
+  pusha
+.body:
+  mov esi, MessageException1F
+  xor eax, eax
+  jmp Panic
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ0:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ0
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ1:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ1
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ2:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ2
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ3:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ3
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ4:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ4
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ5:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ5
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ6:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ6
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ7:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ7
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ8:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ8
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ9:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ9
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ10:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ10
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ11:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ11
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ12:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ12
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ13:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ13
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ14:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ14
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 ; Interrupt
 align 4
 IRQ15:
+  cli
+  pusha
+.body:
+  mov esi, MessageIRQ15
+  call PrintString
   jmp HaltSystem
+.epilogue:
+  popa
+  iret
 
 section .data
 
@@ -779,6 +1178,54 @@ MessageExceptionSX:
 MessageException1F:
   db 'Unknown Exception (1Fh)',0
 
+MessageIRQ0:
+  db 'IRQ0',0
+
+MessageIRQ1:
+  db 'IRQ1',0
+
+MessageIRQ2:
+  db 'IRQ2',0
+
+MessageIRQ3:
+  db 'IRQ3',0
+
+MessageIRQ4:
+  db 'IRQ4',0
+
+MessageIRQ5:
+  db 'IRQ5',0
+
+MessageIRQ6:
+  db 'IRQ6',0
+
+MessageIRQ7:
+  db 'IRQ7',0
+
+MessageIRQ8:
+  db 'IRQ8',0
+
+MessageIRQ9:
+  db 'IRQ9',0
+
+MessageIRQ10:
+  db 'IRQ10',0
+
+MessageIRQ11:
+  db 'IRQ11',0
+
+MessageIRQ12:
+  db 'IRQ12',0
+
+MessageIRQ13:
+  db 'IRQ13',0
+
+MessageIRQ14:
+  db 'IRQ14',0
+
+MessageIRQ15:
+  db 'IRQ15',0
+
 ;-------------------------------------------------------------------------------
 ; PANIC
 ;-------------------------------------------------------------------------------
@@ -799,16 +1246,35 @@ HaltSystem:
   hlt
   jmp HaltSystem
 
-;
-; Panic
-;
-Panic:
-  jmp HaltSystem
-
 section .data
 
 MessageSystemHalted:
   db 'SYSTEM HALTED!',13,10,0
+
+section .text
+
+;
+; Panic
+;
+; Calling Registers:
+;
+;   ESI = exception
+;   EAX = error code
+;
+Panic:
+  pusha
+  push eax
+  push esi
+  mov esi, MessagePanic1
+  call PrintFormatted
+  add esp, 8
+  popa
+  jmp HaltSystem
+
+section .data
+
+MessagePanic1:
+  db '! EXCEPTION %s    ERROR CODE %h',CR,LF,0
 
 ;-------------------------------------------------------------------------------
 ; CONSOLE
@@ -1026,6 +1492,8 @@ PrintFormatted:
   jz .print_literal
   cmp al, 'h'
   jz .print_h
+  cmp al, 's'
+  jz .print_s
   jmp .loop_start
 .print_h:
   mov ebx, [ebp-16] ; PARAM
@@ -1042,6 +1510,14 @@ PrintFormatted:
   sub cl, 4
   jc .loop_start
   jmp .print_h_loop_start
+.print_s:
+  push esi
+  mov ebx, [ebp-16] ; PARAM
+  inc dword [ebp-16]
+  mov esi, [ebp+4*ebx+36]
+  call PrintString
+  pop esi
+  jmp .loop_start
 .loop_exit:
   add esp, 20
   popa
@@ -1050,3 +1526,69 @@ PrintFormatted:
 section .data
 
 HexDigits db '0123456789ABCDEF'
+
+;-------------------------------------------------------------------------------
+; TESTS
+;-------------------------------------------------------------------------------
+
+;
+; TestExceptionDE - Raise Divide-by-zero Error
+;
+TestExceptionDE:
+  pusha
+  xor eax, eax
+  xor edx, edx
+  xor ebx, ebx
+  div ebx
+  popa
+  ret
+
+TestExceptionDB_1:
+  pusha
+  icebp
+  popa
+  ret
+
+TestExceptionDB_2:
+  pusha
+  pushf
+  pop eax
+  or eax, 0x00000100
+  push eax
+  popf
+  nop
+  pushf
+  pop eax
+  and eax, 0xfffffeff
+  push eax
+  popf
+  popa
+  ret
+
+;
+; TestInterruptNMI - Raise a non-maskable interrupt
+;
+TestInterruptNMI:
+  pusha
+  pushf
+  cli
+  int 2
+  popf
+  popa
+  ret
+
+TestExceptionGP:
+  pusha
+  xor eax, eax
+  mov ax, fs
+  push eax
+  xor eax, eax
+  mov fs, ax
+  xor eax, eax
+  push eax
+  mov [fs:0xc000000], eax
+  pop eax
+  pop eax
+  mov fs, ax
+  popa
+  ret
