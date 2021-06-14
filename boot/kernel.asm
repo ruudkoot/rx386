@@ -3,9 +3,16 @@
 ;
 
 KERNEL_BASE equ 0x80010000
+USER_BASE   equ 0x00010000
 
-%define LOW_WORD(lbl) ((lbl - KERNEL_START + KERNEL_BASE) & 0xffff)
-%define HIGH_WORD(lbl) (((lbl - KERNEL_START + KERNEL_BASE) >> 16) & 0xffff)
+%define LOW_WORD(lbl) \
+  ((lbl - KERNEL_START + KERNEL_BASE) & 0xffff)
+%define HIGH_WORD(lbl) \
+  (((lbl - KERNEL_START + KERNEL_BASE) >> 16) & 0xffff)
+%define LOW_BYTE_OF_HIGH_WORD(lbl) \
+  (((lbl - KERNEL_START + KERNEL_BASE) >> 16) & 0xff)
+%define HIGH_BYTE_OF_HIGH_WORD(lbl) \
+  (((lbl - KERNEL_START + KERNEL_BASE) >> 24) & 0xff)
 
 cpu   386
 bits  32
@@ -14,47 +21,127 @@ org   KERNEL_BASE
 section .text
 
 KERNEL_START:
-  jmp Main0
+  jmp Main
 
           db 0
 Signature db CR,LF,'RX/386 KERNEL ',__UTC_DATE__,' ',__UTC_TIME__,CR,LF
 Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',CR,LF,0
 
-Main0:
-  mov esi, Signature
-  call PrintString
-  lgdt [GDTR]
-  lidt [IDTR]
-  jmp SELECTOR_CODE0:Main1
-Main1:
+Main:
+.prologue:
   mov eax, SELECTOR_DATA0
   mov ds, eax
   mov es, eax
   mov fs, eax
   mov gs, eax
   mov ss, eax
-Main2:
+  mov esp, KernelStack.top
+  lgdt [GDTR]
+  lidt [IDTR]
+  jmp SELECTOR_CODE0:.body
+.body:
+  mov esi, Signature
+  call PrintString
   ;call TestExceptionDE
   ;call TestExceptionDB_1
   ;call TestExceptionDB_2
   ;call TestInterruptNMI
-  call TestExceptionGP
+  ;call TestExceptionGP
   ;call TestExceptionPF
-Main3:
+.enter_ring3:
+  mov eax, SELECTOR_TSS | 3
+  ltr ax
+  mov eax, SELECTOR_DATA3 | 3
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+  mov eax, esp
+  push SELECTOR_DATA3 | 3
+  push eax
+  pushf ; FIXME: enable interrupts
+  push SELECTOR_CODE3 | 3
+  push Ring3
+  iret
+.epilogue:
   jmp HaltSystem
 
+Ring3:
+  mov al, '3'
+  ;int SYSCALL_CONSOLEOUT
+  jmp Ring3
+
 ;-------------------------------------------------------------------------------
-; SEGMENTS
+; TASK STATE SEGMENT
 ;-------------------------------------------------------------------------------
 
-SD_TYPE_SYSTEM        equ 0x00
+section .text ; FIXME: .data (but relocation errors)
+
+align 4
+TSS:
+.start:
+  dw 0                ; LINK
+  dw 0                ; reserved
+  dd KernelStack.top  ; ESP0
+  dw SELECTOR_DATA0   ; SS0
+  dw 0                ; reserved
+  dd 0                ; ESP1
+  dw 0                ; SS1
+  dw 0                ; reserved
+  dd 0                ; ESP2
+  dw 0                ; SS2
+  dw 0                ; reserved
+  dd 0                ; CR3
+  dd 0                ; EIP
+  dd 0                ; EFLAGS
+  dd 0                ; EAX
+  dd 0                ; ECX
+  dd 0                ; EDX
+  dd 0                ; EBX
+  dd 0                ; ESP
+  dd 0                ; EBP
+  dd 0                ; ESI
+  dd 0                ; EDI
+  dw 0                ; ES
+  dw 0                ; reserved
+  dw 0                ; CS
+  dw 0                ; reserved
+  dw 0                ; SS
+  dw 0                ; reserved
+  dw 0                ; DS
+  dw 0                ; reserved
+  dw 0                ; FS
+  dw 0                ; reserved
+  dw 0                ; GS
+  dw 0                ; reserved
+  dw 0                ; LDTR
+  dw 0                ; reserved
+  dw 0                ; reserved / trap
+  dw 0                ; IOPB offset
+.end:
+
+section .bss
+
+KernelStack:
+.bottom:
+  resd 1024
+.top:
+
+;-------------------------------------------------------------------------------
+; SEGMENT DESCRIPTOR TABLE
+;-------------------------------------------------------------------------------
+
+SD_TYPE_LDT           equ 0x00
+SD_TYPE_TSS_16        equ 0x01
+SD_TYPE_TSS_32        equ 0x09
 SD_TYPE_DATA          equ 0x10
 SD_TYPE_CODE          equ 0x18
+SD_TSS_BUSY           equ 0x02
+SD_CODE_DATA_ACCESSED equ 0x01
 SD_DATA_WRITABLE      equ 0x02
 SD_DATA_GROWDOWN      equ 0x04
 SD_CODE_READABLE      equ 0x02
 SD_CODE_CONFORMING    equ 0x04
-SD_ACCESSED           equ 0x01
 SD_DPL0               equ 0x00
 SD_DPL1               equ 0x20
 SD_DPL2               equ 0x40
@@ -68,6 +155,7 @@ SD_GRANULARITY_BYTE   equ 0x00
 SD_GRANULARITY_PAGE   equ 0x80
 
 SELECTOR_NULL         equ GDT.selector_null  - GDT.start
+SELECTOR_TSS          equ GDT.selector_tss   - GDT.start
 SELECTOR_DATA0        equ GDT.selector_data0 - GDT.start
 SELECTOR_CODE0        equ GDT.selector_code0 - GDT.start
 SELECTOR_DATA3        equ GDT.selector_data3 - GDT.start
@@ -85,13 +173,13 @@ GDT:
   db SD_NOTPRESENT
   db 0x00
   db 0x00
-.selector_null2:
-  dw 0x0000
-  dw 0x0000
-  db 0x00
-  db SD_NOTPRESENT
-  db 0x00
-  db 0x00
+.selector_tss:
+  dw TSS.end - TSS.start ; FIXME: -1?
+  dw LOW_WORD(TSS)
+  db LOW_BYTE_OF_HIGH_WORD(TSS)
+  db SD_TYPE_TSS_32 | SD_DPL3 | SD_PRESENT
+  db 0x00 | SD_SIZE_16BIT | SD_GRANULARITY_BYTE
+  db HIGH_BYTE_OF_HIGH_WORD(TSS)
 .selector_data0:
   dw 0xffff
   dw 0x0000
@@ -129,7 +217,7 @@ GDTR:
   dd GDT
 
 ;-------------------------------------------------------------------------------
-; INTERRUPTS
+; INTERRUPT DESCRIPTOR TABLE
 ;-------------------------------------------------------------------------------
 
 section .text

@@ -1564,13 +1564,13 @@ PageTableSetup:
   loop .page_directory_loop
 .page_directory_fill:
   mov eax, PageTable0
-  or eax, PAGE_PRESENT | PAGE_RW
+  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
   mov [PageDirectory], eax
   mov eax, PageTable8
-  or eax, PAGE_PRESENT | PAGE_RW
+  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
   mov [PageDirectory+4*512], eax
 .page_table:
-  mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW
+  mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
   mov ecx, 1024
 .page_table_loop:
   mov [PageTable0+4*ecx-4], eax
