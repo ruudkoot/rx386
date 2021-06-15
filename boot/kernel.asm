@@ -18,9 +18,28 @@ cpu   386
 bits  32
 org   KERNEL_BASE
 
+EFLAGS_CF   equ 0x00000001
+EFLAGS_PF   equ 0x00000004
+EFLAGS_AF   equ 0x00000010
+EFLASG_ZF   equ 0x00000040
+EFLAGS_SF   equ 0x00000080
+EFLAGS_TF   equ 0x00000100
+EFLAGS_IF   equ 0x00000200
+EFLAGS_DF   equ 0x00000400
+EFLAGS_OF   equ 0x00000800
+EFLAGS_IOPL equ 0x00003000
+EFLAGS_NT   equ 0x00004000
+EFLAGS_RF   equ 0x00010000
+EFLAGS_VM   equ 0x00020000
+EFLAGS_AC   equ 0x00040000
+EFLAGS_VIF  equ 0x00080000
+EFLAGS_VIP  equ 0x00100000
+EFLAGS_ID   equ 0x00200000
+
 section .text
 
 KERNEL_START:
+  cli
   jmp Main
 
           db 0
@@ -48,6 +67,11 @@ Main:
   ;call TestInterruptNMI
   ;call TestExceptionGP
   ;call TestExceptionPF
+.enable_irqs:
+  mov al, 0xfc
+  out PORT_PIC_MASTER_DATA, al
+  mov al, 0xff
+  out PORT_PIC_SLAVE_DATA, al
 .enter_ring3:
   mov eax, SELECTOR_TSS | 3
   ltr ax
@@ -59,7 +83,10 @@ Main:
   mov eax, esp
   push SELECTOR_DATA3 | 3
   push eax
-  pushf ; FIXME: enable interrupts
+  pushf
+  pop eax
+  or eax, EFLAGS_IF
+  push eax
   push SELECTOR_CODE3 | 3
   push Ring3
   iret
@@ -654,9 +681,10 @@ IRQ0:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ0
-  call PrintString
-  jmp HaltSystem
+  mov al, 0
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
   popa
   iret
@@ -667,9 +695,11 @@ IRQ1:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ1
-  call PrintString
-  jmp HaltSystem
+  mov al, 1
+  call DebugIRQ
+  in al, PORT_KEYB_DATA
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
   popa
   iret
@@ -680,10 +710,12 @@ IRQ2:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ2
-  call PrintString
-  jmp HaltSystem
+  mov al, 2
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -693,10 +725,12 @@ IRQ3:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ3
-  call PrintString
-  jmp HaltSystem
+  mov al, 3
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -706,10 +740,12 @@ IRQ4:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ4
-  call PrintString
-  jmp HaltSystem
+  mov al, 4
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -719,10 +755,12 @@ IRQ5:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ5
-  call PrintString
-  jmp HaltSystem
+  mov al, 5
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -732,10 +770,12 @@ IRQ6:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ6
-  call PrintString
-  jmp HaltSystem
+  mov al, 6
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -745,10 +785,12 @@ IRQ7:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ7
-  call PrintString
-  jmp HaltSystem
+  mov al, 7
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -758,10 +800,13 @@ IRQ8:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ8
-  call PrintString
-  jmp HaltSystem
+  mov al, 8
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -771,10 +816,13 @@ IRQ9:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ9
-  call PrintString
-  jmp HaltSystem
+  mov al, 9
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -784,10 +832,13 @@ IRQ10:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ10
-  call PrintString
-  jmp HaltSystem
+  mov al, 10
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -797,10 +848,13 @@ IRQ11:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ11
-  call PrintString
-  jmp HaltSystem
+  mov al, 11
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -810,10 +864,13 @@ IRQ12:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ12
-  call PrintString
-  jmp HaltSystem
+  mov al, 12
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -823,10 +880,13 @@ IRQ13:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ13
-  call PrintString
-  jmp HaltSystem
+  mov al, 13
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -836,10 +896,13 @@ IRQ14:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ14
-  call PrintString
-  jmp HaltSystem
+  mov al, 14
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -849,10 +912,13 @@ IRQ15:
   cli
   pusha
 .body:
-  mov esi, MessageIRQ15
-  call PrintString
-  jmp HaltSystem
+  mov al, 15
+  call DebugIRQ
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_SLAVE_CMD, al
+  out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  jmp HaltSystem
   popa
   iret
 
@@ -1266,53 +1332,23 @@ MessageExceptionSX:
 MessageException1F:
   db 'Unknown Exception (1Fh)',0
 
-MessageIRQ0:
-  db 'IRQ0',0
+;-------------------------------------------------------------------------------
+; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
+;-------------------------------------------------------------------------------
 
-MessageIRQ1:
-  db 'IRQ1',0
+PORT_PIC_MASTER_CMD       equ 0x20
+PORT_PIC_MASTER_DATA      equ 0x21
+PORT_PIC_SLAVE_CMD        equ 0xa0
+PORT_PIC_SLAVE_DATA       equ 0xa1
 
-MessageIRQ2:
-  db 'IRQ2',0
+PIC_CMD_NONSPECIFIC_EOI   equ 0x20
 
-MessageIRQ3:
-  db 'IRQ3',0
+;-------------------------------------------------------------------------------
+; KEYBOARD CONTROLLER (8042)
+;-------------------------------------------------------------------------------
 
-MessageIRQ4:
-  db 'IRQ4',0
-
-MessageIRQ5:
-  db 'IRQ5',0
-
-MessageIRQ6:
-  db 'IRQ6',0
-
-MessageIRQ7:
-  db 'IRQ7',0
-
-MessageIRQ8:
-  db 'IRQ8',0
-
-MessageIRQ9:
-  db 'IRQ9',0
-
-MessageIRQ10:
-  db 'IRQ10',0
-
-MessageIRQ11:
-  db 'IRQ11',0
-
-MessageIRQ12:
-  db 'IRQ12',0
-
-MessageIRQ13:
-  db 'IRQ13',0
-
-MessageIRQ14:
-  db 'IRQ14',0
-
-MessageIRQ15:
-  db 'IRQ15',0
+PORT_KEYB_DATA    equ 0x60
+PORT_KEYB_CONTROL equ 0x64
 
 ;-------------------------------------------------------------------------------
 ; PANIC
@@ -1363,6 +1399,21 @@ section .data
 
 MessagePanic1:
   db '! EXCEPTION %s    ERROR CODE %h',CR,LF,0
+
+;
+; DebugIRQ
+;
+; Calling Regsiters:
+;
+;   AL = irq
+;
+DebugIRQ:
+  pusha
+  cbw
+  mov ebx, eax
+  inc byte [CONSOLE_FRAMEBUFFER+2*ebx+128]
+  popa
+  ret
 
 ;-------------------------------------------------------------------------------
 ; CONSOLE
