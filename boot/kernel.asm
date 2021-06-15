@@ -95,7 +95,7 @@ Main:
 
 Ring3:
   mov al, '3'
-  ;int SYSCALL_CONSOLEOUT
+  int SYSCALL_CONSOLEOUT
   jmp Ring3
 
 ;-------------------------------------------------------------------------------
@@ -922,6 +922,17 @@ IRQ15:
   popa
   iret
 
+; Syscall
+align 4
+SysCall_ConsoleOut:
+  cli
+  pusha
+.body:
+  call ConsoleOut
+.epilogue:
+  popa
+  iret
+
 section .data
 
 ID_GATETYPE_TASK32  equ 0x05
@@ -935,6 +946,8 @@ ID_DPL1             equ 0x20
 ID_DPL2             equ 0x40
 ID_DPL3             equ 0x60
 ID_PRESENT          equ 0x80
+
+SYSCALL_CONSOLEOUT  equ (IDT.syscall_console_out - IDT.start) / 8
 
 align 8
 IDT:
@@ -1227,6 +1240,12 @@ IDT:
   db 0
   db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
   dw HIGH_WORD(IRQ15)
+.syscall_console_out:
+  dw LOW_WORD(SysCall_ConsoleOut)
+  dw SELECTOR_CODE0
+  db 0
+  db ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+  dw HIGH_WORD(SysCall_ConsoleOut)
 .end:
 
 IDTR:
