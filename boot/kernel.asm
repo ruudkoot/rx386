@@ -88,15 +88,60 @@ Main:
   or eax, EFLAGS_IF
   push eax
   push SELECTOR_CODE3 | 3
-  push Ring3
+  push Thread1
   iret
 .epilogue:
   jmp HaltSystem
 
-Ring3:
+Thread1:
+  mov al, '1'
+  int SYSCALL_CONSOLEOUT
+  jmp Thread1
+Thread2:
+  mov al, '2'
+  int SYSCALL_CONSOLEOUT
+  jmp Thread2
+Thread3:
   mov al, '3'
   int SYSCALL_CONSOLEOUT
-  jmp Ring3
+  jmp Thread3
+Thread4:
+  mov al, '4'
+  int SYSCALL_CONSOLEOUT
+  jmp Thread4
+
+;-------------------------------------------------------------------------------
+; THREAD CONTROL BLOCKS
+;-------------------------------------------------------------------------------
+
+section .data
+
+CurrentThread dd TCB.thread1
+
+align 4
+TCB:
+.start:
+.thread1:
+  dd .thread2
+  dd Thread1
+  dd EFLAGS_IF
+  dd 0x00000000
+.thread2:
+  dd .thread3
+  dd Thread2
+  dd EFLAGS_IF
+  dd 0x00000000
+.thread3:
+  dd .thread4
+  dd Thread3
+  dd EFLAGS_IF
+  dd 0x00000000
+.thread4:
+  dd .thread1
+  dd Thread4
+  dd EFLAGS_IF
+  dd 0x00000000
+.end:
 
 ;-------------------------------------------------------------------------------
 ; TASK STATE SEGMENT
@@ -680,9 +725,17 @@ align 4
 IRQ0:
   cli
   pusha
+  mov ebp, esp
 .body:
   mov al, 0
   call DebugIRQ
+.switch_task:
+  mov ebx, [CurrentThread]
+  mov eax, [ebx]
+  mov [CurrentThread], eax
+  mov edx, [eax+4]
+  mov [ebp+32], edx
+.eoi:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
