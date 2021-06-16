@@ -72,6 +72,30 @@ Main:
   out PORT_PIC_MASTER_DATA, al
   mov al, 0xff
   out PORT_PIC_SLAVE_DATA, al
+.patch_tcbs:
+  mov eax, cr3
+  mov [TCB.thread1+TCB_CR3], eax
+  mov [TCB.thread2+TCB_CR3], eax
+  mov [TCB.thread3+TCB_CR3], eax
+  mov [TCB.thread4+TCB_CR3], eax
+.debug:
+  ;push Thread4_Stack.top
+  ;push Thread4_Stack.bottom
+  ;push Thread3_Stack.top
+  ;push Thread3_Stack.bottom
+  ;push Thread2_Stack.top
+  ;push Thread2_Stack.bottom
+  ;push Thread1_Stack.top
+  ;push Thread1_Stack.bottom
+  ;push Thread4
+  ;push Thread3
+  ;push Thread2
+  ;push Thread1
+  ;push KernelStack.top
+  ;push KernelStack.bottom
+  ;push esp
+  ;mov esi, .message
+  ;call PrintFormatted
 .enter_ring3:
   mov eax, SELECTOR_TSS | 3
   ltr ax
@@ -80,9 +104,8 @@ Main:
   mov es, ax
   mov fs, ax
   mov gs, ax
-  mov eax, esp
   push SELECTOR_DATA3 | 3
-  push eax
+  push Thread1_Stack.top
   pushf
   pop eax
   or eax, EFLAGS_IF
@@ -92,27 +115,97 @@ Main:
   iret
 .epilogue:
   jmp HaltSystem
+.message:
+  ;db 'ESP = %h',CR,LF
+  ;db 'KernelStack.bottom = %h',CR,LF
+  ;db 'KernelStack.top = %h',CR,LF
+  ;db 'Thread1 = %h',CR,LF
+  ;db 'Thread2 = %h',CR,LF
+  ;db 'Thread3 = %h',CR,LF
+  ;db 'Thread4 = %h',CR,LF
+  ;db 'Thread1_Stack.bottom = %h',CR,LF
+  ;db 'Thread1_Stack.top = %h',CR,LF
+  ;db 'Thread2_Stack.bottom = %h',CR,LF
+  ;db 'Thread2_Stack.top = %h',CR,LF
+  ;db 'Thread3_Stack.bottom = %h',CR,LF
+  ;db 'Thread3_Stack.top = %h',CR,LF
+  ;db 'Thread4_Stack.bottom = %h',CR,LF
+  ;db 'Thread4_Stack.top = %h',CR,LF
+  ;db 0
+
+;-------------------------------------------------------------------------------
+; USER MODE
+;-------------------------------------------------------------------------------
+
+section .text
 
 Thread1:
   mov al, '1'
   int SYSCALL_CONSOLEOUT
+  ;mov al, 'A'
+  ;int SYSCALL_CONSOLEOUT
   jmp Thread1
 Thread2:
   mov al, '2'
   int SYSCALL_CONSOLEOUT
+  ;mov al, 'B'
+  ;int SYSCALL_CONSOLEOUT
   jmp Thread2
 Thread3:
   mov al, '3'
   int SYSCALL_CONSOLEOUT
+  ;mov al, 'C'
+  ;int SYSCALL_CONSOLEOUT
   jmp Thread3
 Thread4:
   mov al, '4'
   int SYSCALL_CONSOLEOUT
+  ;mov al, 'D'
+  ;int SYSCALL_CONSOLEOUT
   jmp Thread4
+
+section .bss
+
+align 4
+Thread1_Stack:
+.bottom:
+  resd 256
+.top:
+Thread2_Stack:
+.bottom:
+  resd 256
+.top:
+Thread3_Stack:
+.bottom:
+  resd 256
+.top:
+Thread4_Stack:
+.bottom:
+  resd 256
+.top:
 
 ;-------------------------------------------------------------------------------
 ; THREAD CONTROL BLOCKS
 ;-------------------------------------------------------------------------------
+
+TCB_NEXT    equ 0
+TCB_CR3     equ 4
+TCB_EIP     equ 8
+TCB_EFLAGS  equ 12
+TCB_EAX     equ 16
+TCB_ECX     equ 20
+TCB_EDX     equ 24
+TCB_EBX     equ 28
+TCB_ESP     equ 32
+TCB_EBP     equ 36
+TCB_ESI     equ 40
+TCB_EDI     equ 44
+TCB_CS      equ 48
+TCB_DS      equ 52
+TCB_ES      equ 56
+TCB_FS      equ 60
+TCB_GS      equ 64
+TCB_SS      equ 68
 
 section .data
 
@@ -122,25 +215,81 @@ align 4
 TCB:
 .start:
 .thread1:
-  dd .thread2
-  dd Thread1
-  dd EFLAGS_IF
-  dd 0x00000000
+  dd .thread2           ; NEXT
+  dd 0x00000000         ; CR3
+  dd Thread1            ; EIP
+  dd EFLAGS_IF          ; EFLAGS
+  dd 0x00000000         ; EAX
+  dd 0x00000000         ; ECX
+  dd 0x00000000         ; EDX
+  dd 0x00000000         ; EBX
+  dd Thread1_Stack.top  ; ESP
+  dd 0x00000000         ; EBP
+  dd 0x00000000         ; ESI
+  dd 0x00000000         ; EDI
+  dd SELECTOR_CODE3 | 3 ; CS
+  dd SELECTOR_DATA3 | 3 ; DS
+  dd SELECTOR_DATA3 | 3 ; ES
+  dd SELECTOR_DATA3 | 3 ; FS
+  dd SELECTOR_DATA3 | 3 ; GS
+  dd SELECTOR_DATA3 | 3 ; SS
 .thread2:
-  dd .thread3
-  dd Thread2
-  dd EFLAGS_IF
-  dd 0x00000000
+  dd .thread3           ; NEXT
+  dd 0x00000000         ; CR3
+  dd Thread2            ; EIP
+  dd EFLAGS_IF          ; EFLAGS
+  dd 0x00000000         ; EAX
+  dd 0x00000000         ; ECX
+  dd 0x00000000         ; EDX
+  dd 0x00000000         ; EBX
+  dd Thread2_Stack.top  ; ESP
+  dd 0x00000000         ; EBP
+  dd 0x00000000         ; ESI
+  dd 0x00000000         ; EDI
+  dd SELECTOR_CODE3 | 3 ; CS
+  dd SELECTOR_DATA3 | 3 ; DS
+  dd SELECTOR_DATA3 | 3 ; ES
+  dd SELECTOR_DATA3 | 3 ; FS
+  dd SELECTOR_DATA3 | 3 ; GS
+  dd SELECTOR_DATA3 | 3 ; SS
 .thread3:
-  dd .thread4
-  dd Thread3
-  dd EFLAGS_IF
-  dd 0x00000000
+  dd .thread4           ; NEXT
+  dd 0x00000000         ; CR3
+  dd Thread3            ; EIP
+  dd EFLAGS_IF          ; EFLAGS
+  dd 0x00000000         ; EAX
+  dd 0x00000000         ; ECX
+  dd 0x00000000         ; EDX
+  dd 0x00000000         ; EBX
+  dd Thread3_Stack.top  ; ESP
+  dd 0x00000000         ; EBP
+  dd 0x00000000         ; ESI
+  dd 0x00000000         ; EDI
+  dd SELECTOR_CODE3 | 3 ; CS
+  dd SELECTOR_DATA3 | 3 ; DS
+  dd SELECTOR_DATA3 | 3 ; ES
+  dd SELECTOR_DATA3 | 3 ; FS
+  dd SELECTOR_DATA3 | 3 ; GS
+  dd SELECTOR_DATA3 | 3 ; SS
 .thread4:
-  dd .thread1
-  dd Thread4
-  dd EFLAGS_IF
-  dd 0x00000000
+  dd .thread1           ; NEXT
+  dd 0x00000000         ; CR3
+  dd Thread4            ; EIP
+  dd EFLAGS_IF          ; EFLAGS
+  dd 0x00000000         ; EAX
+  dd 0x00000000         ; ECX
+  dd 0x00000000         ; EDX
+  dd 0x00000000         ; EBX
+  dd Thread4_Stack.top  ; ESP
+  dd 0x00000000         ; EBP
+  dd 0x00000000         ; ESI
+  dd 0x00000000         ; EDI
+  dd SELECTOR_CODE3 | 3 ; CS
+  dd SELECTOR_DATA3 | 3 ; DS
+  dd SELECTOR_DATA3 | 3 ; ES
+  dd SELECTOR_DATA3 | 3 ; FS
+  dd SELECTOR_DATA3 | 3 ; GS
+  dd SELECTOR_DATA3 | 3 ; SS
 .end:
 
 ;-------------------------------------------------------------------------------
@@ -194,6 +343,7 @@ TSS:
 
 section .bss
 
+align 4
 KernelStack:
 .bottom:
   resd 1024
@@ -720,27 +870,151 @@ Exception1F:
   popa
   iret
 
-; Interrupt
+;
+; IRQ0 - Programmable Interval Timer
+;
+; Performs context switching.
+;
+; Calling Stack:
+;
+;   SS3
+;   ESP3
+;   EFLAGS
+;   CS3
+;   EIP
+;
+; To Do:
+;
+; - Floating-point registers
+;
+; Ideas:
+;
+; - Point ESP0 into the TCB to avoid copy from stack to TCB.
+; - Handle segments more efficiently
+;
 align 4
 IRQ0:
   cli
+  push ds ; FIXME: partial write
+  push es ; FIXME: partial write
+  push fs ; FIXME: partial write
+  push gs ; FIXME: partial write
   pusha
+  mov ax, SELECTOR_DATA0
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
   mov ebp, esp
+  ;mov esi, .message
+  ;call PrintFormatted
+  ;call HaltSystem
 .body:
   mov al, 0
   call DebugIRQ
-.switch_task:
+.save_state:
   mov ebx, [CurrentThread]
-  mov eax, [ebx]
-  mov [CurrentThread], eax
-  mov edx, [eax+4]
-  mov [ebp+32], edx
+  mov eax, [ebp+64]
+  mov [ebx+TCB_SS], eax
+  mov eax, [ebp+60]
+  mov [ebx+TCB_ESP], eax
+  mov eax, [ebp+56]
+  mov [ebx+TCB_EFLAGS], eax
+  mov eax, [ebp+52]
+  mov [ebx+TCB_CS], eax
+  mov eax, [ebp+48]
+  mov [ebx+TCB_EIP], eax
+  mov eax, [ebp+44]
+  mov [ebx+TCB_DS], eax
+  mov eax, [ebp+40]
+  mov [ebx+TCB_ES], eax
+  mov eax, [ebp+36]
+  mov [ebx+TCB_FS], eax
+  mov eax, [ebp+32]
+  mov [ebx+TCB_GS], eax
+  mov eax, [ebp+28]
+  mov [ebx+TCB_EAX], eax
+  mov eax, [ebp+24]
+  mov [ebx+TCB_ECX], eax
+  mov eax, [ebp+20]
+  mov [ebx+TCB_EDX], eax
+  mov eax, [ebp+16]
+  mov [ebx+TCB_EBX], eax
+  mov eax, [ebp+8]
+  mov [ebx+TCB_EBP], eax
+  mov eax, [ebp+4]
+  mov [ebx+TCB_ESI], eax
+  mov eax, [ebp+0]
+  mov [ebx+TCB_EDI], eax
+.switch_task:
+  mov ebx, [ebx+TCB_NEXT]
+  mov [CurrentThread], ebx
+  mov eax, [ebx+TCB_SS]
+  mov [ebp+64], eax
+  mov eax, [ebx+TCB_ESP]
+  mov [ebp+60], eax
+  mov eax, [ebx+TCB_EFLAGS]
+  mov [ebp+56], eax
+  mov eax, [ebx+TCB_CS]
+  mov [ebp+52], eax
+  mov eax, [ebx+TCB_EIP]
+  mov [ebp+48], eax
+  mov eax, [ebx+TCB_DS]
+  mov [ebp+44], eax
+  mov eax, [ebx+TCB_ES]
+  mov [ebp+40], eax
+  mov eax, [ebx+TCB_FS]
+  mov [ebp+36], eax
+  mov eax, [ebx+TCB_GS]
+  mov [ebp+32], eax
+  mov eax, [ebx+TCB_EAX]
+  mov [ebp+28], eax
+  mov eax, [ebx+TCB_ECX]
+  mov [ebp+24], eax
+  mov eax, [ebx+TCB_EDX]
+  mov [ebp+20], eax
+  mov eax, [ebx+TCB_EBX]
+  mov [ebp+16], eax
+  mov eax, [ebx+TCB_EBP]
+  mov [ebp+8], eax
+  mov eax, [ebx+TCB_ESI]
+  mov [ebp+4], eax
+  mov eax, [ebx+TCB_EDI]
+  mov [ebp+0], eax
+  ;mov esi, .message
+  ;call PrintFormatted
+  ;call HaltSystem
 .eoi:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
   popa
+  pop gs
+  pop fs
+  pop es
+  pop ds
   iret
+.message:
+  ;db CR,LF
+  ;db "IRQ0: EDI    = %h",CR,LF
+  ;db "IRQ0: ESI    = %h",CR,LF
+  ;db "IRQ0: EBP    = %h",CR,LF
+  ;db "IRQ0: ESP    = %h",CR,LF
+  ;db "IRQ0: EBX    = %h",CR,LF
+  ;db "IRQ0: EDX    = %h",CR,LF
+  ;db "IRQ0: ECX    = %h",CR,LF
+  ;db "IRQ0: EAX    = %h",CR,LF
+  ;db "IRQ0: GS     = %h",CR,LF
+  ;db "IRQ0: FS     = %h",CR,LF
+  ;db "IRQ0: ES     = %h",CR,LF
+  ;db "IRQ0: DS     = %h",CR,LF
+  ;db "IRQ0: EIP    = %h",CR,LF
+  ;db "IRQ0: CS     = %h",CR,LF
+  ;db "IRQ0: EFLAGS = %h",CR,LF
+  ;db "IRQ0: ESP3   = %h",CR,LF
+  ;db "IRQ0: SS3    = %h",CR,LF
+  ;db 0
+
 
 ; Interrupt
 align 4
