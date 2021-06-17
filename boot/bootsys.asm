@@ -2,14 +2,13 @@
 ; BOOT.SYS
 ;
 
+%include "defs.inc"
+
 BOOTSYS_BASE equ 0x1000
 
 cpu   8086
 bits  16
 org   BOOTSYS_BASE
-
-PORT_WAIT equ 0x80
-%define IO_DELAY out PORT_WAIT, al
 
 ROOT_DIRECTORY_CLUSTER  equ 1
 
@@ -20,18 +19,6 @@ DIRECTORY_ENTRY_TIME    equ 0x16
 DIRECTORY_ENTRY_DATE    equ 0x18
 DIRECTORY_ENTRY_CLUSTER equ 0x1a
 DIRECTORY_ENTRY_SIZE    equ 0x1c
-
-CR0_PE                  equ 0x00000001
-CR0_MP                  equ 0x00000002
-CR0_EM                  equ 0x00000004
-CR0_TS                  equ 0x00000008
-CR0_ET                  equ 0x00000010
-CR0_NE                  equ 0x00000020
-CR0_WP                  equ 0x00010020
-CR0_AM                  equ 0x00040000
-CR0_NW                  equ 0x20000000
-CR0_CD                  equ 0x40000000
-CR0_PG                  equ 0x80000000
 
 BOOTSYS_START:
   jmp 0000:Main
@@ -780,9 +767,6 @@ KernelLoad:
 ; INTERRUPT HANDLERS
 ;-------------------------------------------------------------------------------
 
-PORT_SYSTEM_CONTROL_A equ 0x92
-PORT_SYSTEM_CONTROL_B equ 0x61
-
 InterruptSetup:
   push ax
   mov word [Int00Off], Interrupt00
@@ -1026,15 +1010,15 @@ InterruptReturn:
 ; CPU DETECTION
 ;-------------------------------------------------------------------------------
 
-CPU_8086 equ 1
-CPU_80286 equ 2
-CPU_80386 equ 3
-CPU_80486 equ 4
+CPU_8086        equ 1
+CPU_80286       equ 2
+CPU_80386       equ 3
+CPU_80486       equ 4
 
 FPU_NOT_PRESENT equ 0
-FPU_8087 equ 1
-FPU_80287 equ 2
-FPU_80387 equ 3
+FPU_8087        equ 1
+FPU_80287       equ 2
+FPU_80387       equ 3
 
 ;
 ; CpuDetect - Detect the CPU
@@ -1254,9 +1238,6 @@ MemoryPrint:
 ; NON-MASKABLE INTERRUPTS
 ;-------------------------------------------------------------------------------
 
-PORT_RTC_INDEX  equ 0x70
-PORT_RTC_DATA   equ 0x71
-
 ;
 ; NmiMask
 ;
@@ -1290,11 +1271,6 @@ NmiUnmask:
 ;-------------------------------------------------------------------------------
 ; A20 GATE
 ;-------------------------------------------------------------------------------
-
-BIOS_15H_DISABLE_A20        equ 0x2400
-BIOS_15H_ENABLE_A20         equ 0x2401
-BIOS_15H_A20_STATUS         equ 0x2402
-BIOS_15H_QUERY_A20_SUPPORT  equ 0x2403
 
 ;
 ; A20Dump
@@ -1385,50 +1361,6 @@ A20Test:
 ;-------------------------------------------------------------------------------
 ; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
 ;-------------------------------------------------------------------------------
-
-PORT_PIC_MASTER_CMD       equ 0x20
-PORT_PIC_MASTER_DATA      equ 0x21
-PORT_PIC_SLAVE_CMD        equ 0xa0
-PORT_PIC_SLAVE_DATA       equ 0xa1
-
-PIC_CMD_AEOI_ROTATE       equ 0x00
-PIC_CMD_OCW3              equ 0x08
-PIC_OCW3_READ_IRR         equ 0x02
-PIC_OCW3_READ_ISR         equ 0x03
-PIC_OCW3_POLLING_MODE     equ 0x04
-PIC_OCW3_SMM_CLEAR        equ 0x40
-PIC_OCW3_SMM_SET          equ 0x60
-PIC_CMD_ICW1              equ 0x10
-PIC_ICW1_NEED_ICW4        equ 0x01
-PIC_ICW1_EDGE             equ 0x00
-PIC_ICW1_LEVEL            equ 0x01
-PIC_ICW1_CASCADE          equ 0x00
-PIC_ICW1_SINGLE           equ 0x02
-PIC_ICW3_MASTER_IRQ2      equ 0x04
-PIC_ICW3_SLAVE_IRQ2       equ 0x02
-PIC_ICW4_MCS85_MODE       equ 0x00
-PIC_ICW4_8086_MODE        equ 0x01
-PIC_ICW4_MANUAL_EOI       equ 0x00
-PIC_ICW4_AUTO_EOI         equ 0x02
-PIC_ICW4_MASTER_PIC       equ 0x00
-PIC_ICW4_SLAVE_PIC        equ 0x04
-PIC_ICW4_BUFFERED         equ 0x08
-PIC_ICW4_SFNM             equ 0x10
-PIC_CMD_NONSPECIFIC_EOI   equ 0x20
-PIC_CMD_NOP               equ 0x40
-PIC_CMD_SPECIFIC_EOI      equ 0x60
-PIC_SEOI_LVL0             equ 0x00
-PIC_SEOI_LVL1             equ 0x01
-PIC_SEOI_LVL2             equ 0x02
-PIC_SEOI_LVL3             equ 0x03
-PIC_SEOI_LVL4             equ 0x04
-PIC_SEOI_LVL5             equ 0x05
-PIC_SEOI_LVL6             equ 0x06
-PIC_SEOI_LVL7             equ 0x07
-PIC_CMD_AEOI_SET_ROTATE   equ 0x80
-PIC_CMD_NSEOI_ROTATE      equ 0xa0
-PIC_CMD_PRIORITY          equ 0xc0
-PIC_CMD_SEOI_ROTATE       equ 0xe0
 
 ;
 ; PicReinitialize
@@ -1530,13 +1462,6 @@ PicDump:
 
 MessagePicDump:
   db 'PIC STATUS [M] IRR=%b ISR=%b IMR=%b [S] IRR=%b ISR=%b IMR=%b',13,10,0
-
-;-------------------------------------------------------------------------------
-; KEYBOARD CONTROLLER (8042)
-;-------------------------------------------------------------------------------
-
-PORT_KEYB_DATA    equ 0x60
-PORT_KEYB_CONTROL equ 0x64
 
 ;-------------------------------------------------------------------------------
 ; PAGING

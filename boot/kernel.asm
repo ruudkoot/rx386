@@ -2,6 +2,8 @@
 ; KERNEL.SYS
 ;
 
+%include "defs.inc"
+
 KERNEL_BASE equ 0x80010000
 USER_BASE   equ 0x00010000
 
@@ -18,23 +20,6 @@ cpu   386
 bits  32
 org   KERNEL_BASE
 
-EFLAGS_CF   equ 0x00000001
-EFLAGS_PF   equ 0x00000004
-EFLAGS_AF   equ 0x00000010
-EFLASG_ZF   equ 0x00000040
-EFLAGS_SF   equ 0x00000080
-EFLAGS_TF   equ 0x00000100
-EFLAGS_IF   equ 0x00000200
-EFLAGS_DF   equ 0x00000400
-EFLAGS_OF   equ 0x00000800
-EFLAGS_IOPL equ 0x00003000
-EFLAGS_NT   equ 0x00004000
-EFLAGS_RF   equ 0x00010000
-EFLAGS_VM   equ 0x00020000
-EFLAGS_AC   equ 0x00040000
-EFLAGS_VIF  equ 0x00080000
-EFLAGS_VIP  equ 0x00100000
-EFLAGS_ID   equ 0x00200000
 
 section .text
 
@@ -352,29 +337,6 @@ KernelStack:
 ;-------------------------------------------------------------------------------
 ; SEGMENT DESCRIPTOR TABLE
 ;-------------------------------------------------------------------------------
-
-SD_TYPE_LDT           equ 0x00
-SD_TYPE_TSS_16        equ 0x01
-SD_TYPE_TSS_32        equ 0x09
-SD_TYPE_DATA          equ 0x10
-SD_TYPE_CODE          equ 0x18
-SD_TSS_BUSY           equ 0x02
-SD_CODE_DATA_ACCESSED equ 0x01
-SD_DATA_WRITABLE      equ 0x02
-SD_DATA_GROWDOWN      equ 0x04
-SD_CODE_READABLE      equ 0x02
-SD_CODE_CONFORMING    equ 0x04
-SD_DPL0               equ 0x00
-SD_DPL1               equ 0x20
-SD_DPL2               equ 0x40
-SD_DPL3               equ 0x60
-SD_NOTPRESENT         equ 0x00
-SD_PRESENT            equ 0x80
-
-SD_SIZE_16BIT         equ 0x00
-SD_SIZE_32BIT         equ 0x40
-SD_GRANULARITY_BYTE   equ 0x00
-SD_GRANULARITY_PAGE   equ 0x80
 
 SELECTOR_NULL         equ GDT.selector_null  - GDT.start
 SELECTOR_TSS          equ GDT.selector_tss   - GDT.start
@@ -1262,18 +1224,6 @@ SysCall_ConsoleOut:
 
 section .data
 
-ID_GATETYPE_TASK32  equ 0x05
-ID_GATETYPE_INTR16  equ 0x06
-ID_GATETYPE_TRAP16  equ 0x07
-ID_GATETYPE_INTR32  equ 0x0E
-ID_GATETYPE_TRAP32  equ 0x0F
-ID_STORAGE_SEGMENT  equ 0x10
-ID_DPL0             equ 0x00
-ID_DPL1             equ 0x20
-ID_DPL2             equ 0x40
-ID_DPL3             equ 0x60
-ID_PRESENT          equ 0x80
-
 SYSCALL_CONSOLEOUT  equ (IDT.syscall_console_out - IDT.start) / 8
 
 align 8
@@ -1679,24 +1629,6 @@ MessageException1F:
   db 'Unknown Exception (1Fh)',0
 
 ;-------------------------------------------------------------------------------
-; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
-;-------------------------------------------------------------------------------
-
-PORT_PIC_MASTER_CMD       equ 0x20
-PORT_PIC_MASTER_DATA      equ 0x21
-PORT_PIC_SLAVE_CMD        equ 0xa0
-PORT_PIC_SLAVE_DATA       equ 0xa1
-
-PIC_CMD_NONSPECIFIC_EOI   equ 0x20
-
-;-------------------------------------------------------------------------------
-; KEYBOARD CONTROLLER (8042)
-;-------------------------------------------------------------------------------
-
-PORT_KEYB_DATA    equ 0x60
-PORT_KEYB_CONTROL equ 0x64
-
-;-------------------------------------------------------------------------------
 ; PANIC
 ;-------------------------------------------------------------------------------
 
@@ -1765,42 +1697,10 @@ DebugIRQ:
 ; CONSOLE
 ;-------------------------------------------------------------------------------
 
-NUL equ 0
-BEL equ 7
-BS  equ 8
-HT  equ 9
-LF  equ 10
-VT  equ 11
-FF  equ 12
-CR  equ 13
-ESC equ 27
-
 CONSOLE_FRAMEBUFFER equ 0x800b8000
 CONSOLE_COLS        equ 80
 CONSOLE_ROWS        equ 25
 CONSOLE_TABS        equ 8
-
-PORT_CRTC_INDEX  equ 0x3d4
-PORT_CRTC_DATA   equ 0x3d5
-
-CRTC_HORIZONTAL_TOTAL         equ 0
-CRTC_HORIZONTAL_DISPLAYED     equ 1
-CRTC_H_SYNC_POSITION          equ 2
-CRTC_SYNC_WIDTH               equ 3
-CRTC_VERTICAL_TOTAL           equ 4
-CRTC_V_TOTAL_ADJUST           equ 5
-CRTC_VERTICAL_DISPLAYED       equ 6
-CRTC_V_SYNC_POSITION          equ 7
-CRTC_INTERLACE_MODE_AND_SKEW  equ 8
-CRTC_MAX_SCAN_LINE_ADDRESS    equ 9
-CRTC_CURSOR_START             equ 10
-CRTC_CURSOR_END               equ 11
-CRTC_START_ADDRESS_HIGH       equ 12
-CRTC_START_ADDRESS_LOW        equ 13
-CRTC_CURSOR_HIGH              equ 14
-CRTC_CURSOR_LOW               equ 15
-CRTC_LIGHT_PEN_HIGH           equ 16
-CRTC_LIGHT_PEN_LOW            equ 17
 
 section .text
 
