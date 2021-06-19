@@ -79,44 +79,44 @@ CR4_PKE                     equ 0x00400000  ; Protection Key Enable
 ; SEGEMENT DESCRIPTORS
 ;-------------------------------------------------------------------------------
 
-SD_TYPE_LDT                 equ 0x00
-SD_TYPE_TSS_16              equ 0x01
-SD_TYPE_TSS_32              equ 0x09
-SD_TYPE_DATA                equ 0x10
-SD_TYPE_CODE                equ 0x18
-SD_TSS_BUSY                 equ 0x02
-SD_CODE_DATA_ACCESSED       equ 0x01
-SD_DATA_WRITABLE            equ 0x02
-SD_DATA_GROWDOWN            equ 0x04
-SD_CODE_READABLE            equ 0x02
-SD_CODE_CONFORMING          equ 0x04
-SD_DPL0                     equ 0x00
-SD_DPL1                     equ 0x20
-SD_DPL2                     equ 0x40
-SD_DPL3                     equ 0x60
-SD_NOTPRESENT               equ 0x00
-SD_PRESENT                  equ 0x80
+SD_SIZE_16BIT               equ 0x00000000
+SD_SIZE_32BIT               equ 0x00400000
+SD_GRANULARITY_BYTE         equ 0x00000000
+SD_GRANULARITY_PAGE         equ 0x00800000
 
-SD_SIZE_16BIT               equ 0x00
-SD_SIZE_32BIT               equ 0x40
-SD_GRANULARITY_BYTE         equ 0x00
-SD_GRANULARITY_PAGE         equ 0x80
+SD_TYPE_LDT                 equ 0x00000000
+SD_TYPE_TSS_16              equ 0x01000000
+SD_TYPE_TSS_32              equ 0x09000000
+SD_TYPE_DATA                equ 0x10000000
+SD_TYPE_CODE                equ 0x18000000
+SD_TSS_BUSY                 equ 0x02000000
+SD_CODE_DATA_ACCESSED       equ 0x01000000
+SD_DATA_WRITABLE            equ 0x02000000
+SD_DATA_GROWDOWN            equ 0x04000000
+SD_CODE_READABLE            equ 0x02000000
+SD_CODE_CONFORMING          equ 0x04000000
+SD_DPL0                     equ 0x00000000
+SD_DPL1                     equ 0x20000000
+SD_DPL2                     equ 0x40000000
+SD_DPL3                     equ 0x60000000
+SD_NOTPRESENT               equ 0x00000000
+SD_PRESENT                  equ 0x80000000
 
 ;-------------------------------------------------------------------------------
 ; INTERRUPT DESCRIPTORS
 ;-------------------------------------------------------------------------------
 
-ID_GATETYPE_TASK32          equ 0x05
-ID_GATETYPE_INTR16          equ 0x06
-ID_GATETYPE_TRAP16          equ 0x07
-ID_GATETYPE_INTR32          equ 0x0E
-ID_GATETYPE_TRAP32          equ 0x0F
-ID_STORAGE_SEGMENT          equ 0x10
-ID_DPL0                     equ 0x00
-ID_DPL1                     equ 0x20
-ID_DPL2                     equ 0x40
-ID_DPL3                     equ 0x60
-ID_PRESENT                  equ 0x80
+ID_GATETYPE_TASK32          equ 0x05000000
+ID_GATETYPE_INTR16          equ 0x06000000
+ID_GATETYPE_TRAP16          equ 0x07000000
+ID_GATETYPE_INTR32          equ 0x0E000000
+ID_GATETYPE_TRAP32          equ 0x0F000000
+ID_STORAGE_SEGMENT          equ 0x10000000
+ID_DPL0                     equ 0x00000000
+ID_DPL1                     equ 0x20000000
+ID_DPL2                     equ 0x40000000
+ID_DPL3                     equ 0x60000000
+ID_PRESENT                  equ 0x80000000
 
 ;-------------------------------------------------------------------------------
 ; I/O DELAY

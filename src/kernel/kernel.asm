@@ -7,19 +7,9 @@
 KERNEL_BASE equ 0x80010000
 USER_BASE   equ 0x00010000
 
-%define LOW_WORD(lbl) \
-  ((lbl - KERNEL_START + KERNEL_BASE) & 0xffff)
-%define HIGH_WORD(lbl) \
-  (((lbl - KERNEL_START + KERNEL_BASE) >> 16) & 0xffff)
-%define LOW_BYTE_OF_HIGH_WORD(lbl) \
-  (((lbl - KERNEL_START + KERNEL_BASE) >> 16) & 0xff)
-%define HIGH_BYTE_OF_HIGH_WORD(lbl) \
-  (((lbl - KERNEL_START + KERNEL_BASE) >> 24) & 0xff)
-
 cpu   386
 bits  32
 org   KERNEL_BASE
-
 
 section .text
 
@@ -40,6 +30,8 @@ Main:
   mov gs, eax
   mov ss, eax
   mov esp, KernelStack.top
+  call GdtShuffle
+  call IdtShuffle
   lgdt [GDTR]
   lidt [IDTR]
   jmp SELECTOR_CODE0:.body
@@ -281,7 +273,7 @@ TCB:
 ; TASK STATE SEGMENT
 ;-------------------------------------------------------------------------------
 
-section .text ; FIXME: .data (but relocation errors)
+section .data
 
 align 4
 TSS:
@@ -335,15 +327,59 @@ KernelStack:
 .top:
 
 ;-------------------------------------------------------------------------------
-; SEGMENT DESCRIPTOR TABLE
+; GLOBAL DESCRIPTOR TABLE
 ;-------------------------------------------------------------------------------
 
-SELECTOR_NULL         equ GDT.selector_null  - GDT.start
-SELECTOR_TSS          equ GDT.selector_tss   - GDT.start
-SELECTOR_DATA0        equ GDT.selector_data0 - GDT.start
-SELECTOR_CODE0        equ GDT.selector_code0 - GDT.start
-SELECTOR_DATA3        equ GDT.selector_data3 - GDT.start
-SELECTOR_CODE3        equ GDT.selector_code3 - GDT.start
+SELECTOR_NULL   equ GDT.selector_null  - GDT.start
+SELECTOR_TSS    equ GDT.selector_tss   - GDT.start
+SELECTOR_DATA0  equ GDT.selector_data0 - GDT.start
+SELECTOR_CODE0  equ GDT.selector_code0 - GDT.start
+SELECTOR_DATA3  equ GDT.selector_data3 - GDT.start
+SELECTOR_CODE3  equ GDT.selector_code3 - GDT.start
+
+section .text
+
+;
+; GdtShuffle - Reorder bytes in GDT
+;
+;   7654 3210 --> 3672 1054
+;
+align 4
+GdtShuffle:
+  pusha
+  mov esi, GDT.start
+  mov edi, GDT.end
+  jmp .loop_check
+.loop_start:
+  mov ebx, [esi]
+  mov ecx, [esi+4]
+  mov eax, ebx
+  shl eax, 16 ; 10..
+  mov edx, ecx
+  and edx, 0x0000ffff
+  or eax, edx ; ..54
+  mov [esi], eax
+  mov eax, ecx
+  and eax, 0x00ff0000 ; .6..
+  mov edx, ecx
+  shr edx, 16
+  and edx, 0x0000ff00
+  or eax, edx ; ..7.
+  mov edx, ebx
+  and edx, 0xff000000
+  or eax, edx ; 3...
+  mov edx, ebx
+  shr edx, 16
+  and edx, 0x000000ff
+  or eax, edx ; ...2
+  mov [esi+4], eax
+  add esi, 8
+.loop_check:
+  cmp esi, edi
+  jl .loop_start
+.epilogue:
+  popa
+  ret
 
 section .data
 
@@ -351,47 +387,34 @@ align 8
 GDT:
 .start:
 .selector_null:
-  dw 0x0000
-  dw 0x0000
-  db 0x00
-  db SD_NOTPRESENT
-  db 0x00
-  db 0x00
+  dd 0x00000000
+  dd 0x00000 \
+      | SD_NOTPRESENT
 .selector_tss:
-  dw TSS.end - TSS.start ; FIXME: -1?
-  dw LOW_WORD(TSS)
-  db LOW_BYTE_OF_HIGH_WORD(TSS)
-  db SD_TYPE_TSS_32 | SD_DPL3 | SD_PRESENT
-  db 0x00 | SD_SIZE_16BIT | SD_GRANULARITY_BYTE
-  db HIGH_BYTE_OF_HIGH_WORD(TSS)
+  dd TSS
+  dd (TSS.end - TSS.start - 1) \
+      | SD_SIZE_16BIT | SD_GRANULARITY_BYTE \
+      | SD_TYPE_TSS_32 | SD_DPL3 | SD_PRESENT
 .selector_data0:
-  dw 0xffff
-  dw 0x0000
-  db 0x00
-  db SD_TYPE_DATA | SD_DATA_WRITABLE | SD_DPL0 | SD_PRESENT
-  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
-  db 0x00
+  dd 0x00000000
+  dd 0xfffff \
+      | SD_SIZE_32BIT | SD_GRANULARITY_PAGE \
+      | SD_TYPE_DATA | SD_DATA_WRITABLE | SD_DPL0 | SD_PRESENT
 .selector_code0:
-  dw 0xffff
-  dw 0x0000
-  db 0x00
-  db SD_TYPE_CODE | SD_CODE_READABLE | SD_DPL0 | SD_PRESENT
-  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
-  db 0x00
+  dd 0x00000000
+  dd 0xfffff \
+      | SD_SIZE_32BIT | SD_GRANULARITY_PAGE \
+      | SD_TYPE_CODE | SD_CODE_READABLE | SD_DPL0 | SD_PRESENT
 .selector_data3:
-  dw 0xffff
-  dw 0x0000
-  db 0x00
-  db SD_TYPE_DATA | SD_DATA_WRITABLE | SD_DPL3 | SD_PRESENT
-  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
-  db 0x00
+  dd 0x00000000
+  dd 0xfffff \
+      | SD_SIZE_32BIT | SD_GRANULARITY_PAGE \
+      | SD_TYPE_DATA | SD_DATA_WRITABLE | SD_DPL3 | SD_PRESENT
 .selector_code3:
-  dw 0xffff
-  dw 0x0000
-  db 0x00
-  db SD_TYPE_CODE | SD_CODE_READABLE | SD_DPL3 | SD_PRESENT
-  db 0x0f | SD_SIZE_32BIT | SD_GRANULARITY_PAGE
-  db 0x00
+  dd 0x00000000
+  dd 0xfffff \
+      | SD_SIZE_32BIT | SD_GRANULARITY_PAGE \
+      | SD_TYPE_CODE | SD_CODE_READABLE | SD_DPL3 | SD_PRESENT
 .end:
 
 GDTR:
@@ -1222,6 +1245,40 @@ SysCall_ConsoleOut:
   popa
   iret
 
+;
+; IdtShuffle - Reorder bytes in IDT
+;
+;   7643 3210 --> 3276 4310
+;
+align 4
+IdtShuffle:
+  pusha
+  mov esi, IDT.start
+  mov edi, IDT.end
+  jmp .loop_check
+.loop_start:
+  mov ebx, [esi]
+  mov ecx, [esi+4]
+  mov eax, ebx
+  and eax, 0x0000ffff
+  mov edx, ecx
+  shl edx, 16
+  or eax, edx
+  mov [esi], eax
+  mov eax, ebx
+  and eax, 0xffff0000
+  mov edx, ecx
+  shr edx, 16
+  or eax, edx
+  mov [esi+4], eax
+  add esi, 8
+.loop_check:
+  cmp esi, edi
+  jl .loop_start
+.epilogue:
+  popa
+  ret
+
 section .data
 
 SYSCALL_CONSOLEOUT  equ (IDT.syscall_console_out - IDT.start) / 8
@@ -1230,299 +1287,152 @@ align 8
 IDT:
 .start:
 .exception_de:
-  dw LOW_WORD(ExceptionDE)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionDE)
+  dd ExceptionDE
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_db:
-  dw LOW_WORD(ExceptionDB)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionDB)
+  dd ExceptionDB
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .interrupt_nmi:
-  dw LOW_WORD(InterruptNMI)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(InterruptNMI)
+  dd InterruptNMI
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_bp:
-  dw LOW_WORD(ExceptionBP)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionBP)
+  dd ExceptionBP
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_of:
-  dw LOW_WORD(ExceptionOF)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionOF)
+  dd ExceptionOF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_br:
-  dw LOW_WORD(ExceptionBR)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionBR)
+  dd ExceptionBR
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_ud:
-  dw LOW_WORD(ExceptionUD)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionUD)
+  dd ExceptionUD
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_nm:
-  dw LOW_WORD(ExceptionNM)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionNM)
+  dd ExceptionNM
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_df:
-  dw LOW_WORD(ExceptionDF)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionDF)
+  dd ExceptionDF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_cso:
-  dw LOW_WORD(ExceptionCSO)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionCSO)
+  dd ExceptionCSO
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_ts:
-  dw LOW_WORD(ExceptionTS)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionTS)
+  dd ExceptionTS
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_np:
-  dw LOW_WORD(ExceptionNP)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionNP)
+  dd ExceptionNP
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_ss:
-  dw LOW_WORD(ExceptionSS)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionSS)
+  dd ExceptionSS
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_gp:
-  dw LOW_WORD(ExceptionGP)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionGP)
+  dd ExceptionGP
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_pf:
-  dw LOW_WORD(ExceptionPF)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionPF)
+  dd ExceptionPF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_0f:
-  dw LOW_WORD(Exception0F)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception0F)
+  dd Exception0F
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_mf:
-  dw LOW_WORD(ExceptionMF)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionMF)
+  dd ExceptionMF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_ac:
-  dw LOW_WORD(ExceptionAC)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionAC)
+  dd ExceptionAC
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_mc:
-  dw LOW_WORD(ExceptionMC)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionMC)
+  dd ExceptionMC
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_xm:
-  dw LOW_WORD(ExceptionXM)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionXM)
+  dd ExceptionXM
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_ve:
-  dw LOW_WORD(ExceptionVE)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionVE)
+  dd ExceptionVE
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_15:
-  dw LOW_WORD(Exception15)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception15)
+  dd Exception15
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_16:
-  dw LOW_WORD(Exception16)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception16)
+  dd Exception16
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_17:
-  dw LOW_WORD(Exception17)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception17)
+  dd Exception17
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_18:
-  dw LOW_WORD(Exception18)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception18)
+  dd Exception18
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_19:
-  dw LOW_WORD(Exception19)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception19)
+  dd Exception19
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_1a:
-  dw LOW_WORD(Exception1A)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception1A)
+  dd Exception1A
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_1b:
-  dw LOW_WORD(Exception1B)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception1B)
+  dd Exception1B
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_1c:
-  dw LOW_WORD(Exception1C)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception1C)
+  dd Exception1C
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_1d:
-  dw LOW_WORD(Exception1D)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception1D)
+  dd Exception1D
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_sx:
-  dw LOW_WORD(ExceptionSX)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(ExceptionSX)
+  dd ExceptionSX
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .exception_1f:
-  dw LOW_WORD(Exception1F)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(Exception1F)
+  dd Exception1F
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq0:
-  dw LOW_WORD(IRQ0)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ0)
+  dd IRQ0
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq1:
-  dw LOW_WORD(IRQ1)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ1)
+  dd IRQ1
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq2:
-  dw LOW_WORD(IRQ2)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ2)
+  dd IRQ2
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq3:
-  dw LOW_WORD(IRQ3)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ3)
+  dd IRQ3
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq4:
-  dw LOW_WORD(IRQ4)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ4)
+  dd IRQ4
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq5:
-  dw LOW_WORD(IRQ5)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ5)
+  dd IRQ5
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq6:
-  dw LOW_WORD(IRQ6)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ6)
+  dd IRQ6
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq7:
-  dw LOW_WORD(IRQ7)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ7)
+  dd IRQ7
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq8:
-  dw LOW_WORD(IRQ8)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ8)
+  dd IRQ8
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq9:
-  dw LOW_WORD(IRQ9)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ9)
+  dd IRQ9
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq10:
-  dw LOW_WORD(IRQ10)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ10)
+  dd IRQ10
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq11:
-  dw LOW_WORD(IRQ11)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ11)
+  dd IRQ11
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq12:
-  dw LOW_WORD(IRQ12)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ12)
+  dd IRQ12
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq13:
-  dw LOW_WORD(IRQ13)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ13)
+  dd IRQ13
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq14:
-  dw LOW_WORD(IRQ14)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ14)
+  dd IRQ14
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq15:
-  dw LOW_WORD(IRQ15)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-  dw HIGH_WORD(IRQ15)
+  dd IRQ15
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .syscall_console_out:
-  dw LOW_WORD(SysCall_ConsoleOut)
-  dw SELECTOR_CODE0
-  db 0
-  db ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
-  dw HIGH_WORD(SysCall_ConsoleOut)
+  dd SysCall_ConsoleOut
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .end:
 
 IDTR:
