@@ -122,18 +122,69 @@ ID_PRESENT                  equ 0x80000000
 ; I/O DELAY
 ;-------------------------------------------------------------------------------
 
-PORT_WAIT                   equ 0x80
+PORT_DELAY                  equ 0xED
 
-%define IO_DELAY            out PORT_WAIT, al
+;
+; IO_DELAY
+;
+;   I/O access in the ISA range (000h - 3FFh) should take 1 microsecond and can
+;   be used to generate short delays before accessing devices.
+;
+%define IO_DELAY            out PORT_DELAY, al
+
+;-------------------------------------------------------------------------------
+; DIRECT MEMORY ACCESS CONTROLLER (8237A)
+;-------------------------------------------------------------------------------
+
+PORT_DMA_1_ADDRESS_0        equ 0x000
+PORT_DMA_1_COUNT_0          equ 0x001
+PORT_DMA_1_ADDRESS_1        equ 0x002
+PORT_DMA_1_COUNT_1          equ 0x003
+PORT_DMA_1_ADDRESS_2        equ 0x004
+PORT_DMA_1_COUNT_2          equ 0x005
+PORT_DMA_1_ADDRESS_3        equ 0x006
+PORT_DMA_1_COUNT_3          equ 0x007
+PORT_DMA_1_STATUS           equ 0x008 ; (R)
+PORT_DMA_1_COMMAND          equ 0x008 ; (W)
+PORT_DMA_1_REQUEST          equ 0x009 ; (W)
+PORT_DMA_1_CHANNEL_MASK     equ 0x00A ; (W)
+PORT_DMA_1_MODE             equ 0x00B ; (W)
+PORT_DMA_1_BUFFER           equ 0x00D ; (R)
+PORT_DMA_1_MASK             equ 0x00F ; (W)
+
+PORT_DMA_2_ADDRESS_0        equ 0x0C0
+PORT_DMA_2_COUNT_0          equ 0x0C1
+PORT_DMA_2_ADDRESS_1        equ 0x0C2
+PORT_DMA_2_COUNT_1          equ 0x0C3
+PORT_DMA_2_ADDRESS_2        equ 0x0C4
+PORT_DMA_2_COUNT_2          equ 0x0C5
+PORT_DMA_2_ADDRESS_3        equ 0x0C6
+PORT_DMA_2_COUNT_3          equ 0x0C7
+PORT_DMA_2_STATUS           equ 0x0D0 ; (R)
+PORT_DMA_2_COMMAND          equ 0x0D0 ; (W)
+PORT_DMA_2_REQUEST          equ 0x0D2 ; (W)
+PORT_DMA_2_CHANNEL_MASK     equ 0x0D4 ; (W)
+PORT_DMA_2_MODE             equ 0x0D6 ; (W)
+PORT_DMA_2_BUFFER           equ 0x0DA ; (R)
+PORT_DMA_2_MASK             equ 0x0DE ; (W)
+
+PORT_DMA_PAGE_0             equ 0x087
+PORT_DMA_PAGE_1             equ 0x083
+PORT_DMA_PAGE_2             equ 0x081
+PORT_DMA_PAGE_3             equ 0x082
+PORT_DMA_PAGE_4             equ 0x08F
+PORT_DMA_PAGE_5             equ 0x08B
+PORT_DMA_PAGE_6             equ 0x089
+PORT_DMA_PAGE_7             equ 0x08A
 
 ;-------------------------------------------------------------------------------
 ; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
 ;-------------------------------------------------------------------------------
 
-PORT_PIC_MASTER_CMD         equ 0x20
-PORT_PIC_MASTER_DATA        equ 0x21
-PORT_PIC_SLAVE_CMD          equ 0xa0
-PORT_PIC_SLAVE_DATA         equ 0xa1
+PORT_PIC_MASTER_CMD         equ 0x020
+PORT_PIC_MASTER_DATA        equ 0x021
+PORT_PIC_SLAVE_CMD          equ 0x0a0
+PORT_PIC_SLAVE_DATA         equ 0x0a1
 
 PIC_CMD_AEOI_ROTATE         equ 0x00
 PIC_CMD_OCW3                equ 0x08
@@ -175,11 +226,35 @@ PIC_CMD_PRIORITY            equ 0xc0
 PIC_CMD_SEOI_ROTATE         equ 0xe0
 
 ;-------------------------------------------------------------------------------
+; PROGRAMMABLE INTERVAL TIMER (828253/8254)
+;-------------------------------------------------------------------------------
+
+PORT_PIT_1_COUNTER0         equ 0x040 ; (RW)
+PORT_PIT_1_COUNTER1         equ 0x041 ; (RW)
+PORT_PIT_1_COUNTER2         equ 0x042 ; (RW)
+PORT_PIT_1_CONTROL          equ 0x043 ; (W)
+
+PORT_PIT_2_COUNTER0         equ 0x048 ; (RW)
+PORT_PIT_2_COUNTER1         equ 0x049 ; (RW)
+PORT_PIT_2_COUNTER2         equ 0x04A ; (RW)
+PORT_PIT_2_CONTROL          equ 0x04B ; (W)
+
+;-------------------------------------------------------------------------------
 ; KEYBOARD CONTROLLER (8042)
 ;-------------------------------------------------------------------------------
 
-PORT_KEYB_DATA              equ 0x60
-PORT_KEYB_CONTROL           equ 0x64
+PORT_KEYB_DATA              equ 0x060
+PORT_KEYB_CONTROL           equ 0x064
+
+;-------------------------------------------------------------------------------
+; REAL-TIME CLOCK & NON-MASKABLE INTERRUPTS
+;-------------------------------------------------------------------------------
+
+PORT_RTC_INDEX              equ 0x070
+PORT_RTC_DATA               equ 0x071
+
+PORT_SYSTEM_CONTROL_A       equ 0x092
+PORT_SYSTEM_CONTROL_B       equ 0x061
 
 ;-------------------------------------------------------------------------------
 ; CRT CONTROLLER (6845)
@@ -206,16 +281,6 @@ CRTC_CURSOR_HIGH            equ 14
 CRTC_CURSOR_LOW             equ 15
 CRTC_LIGHT_PEN_HIGH         equ 16
 CRTC_LIGHT_PEN_LOW          equ 17
-
-;-------------------------------------------------------------------------------
-; REAL-TIME CLOCK & NON-MASKABLE INTERRUPTS
-;-------------------------------------------------------------------------------
-
-PORT_RTC_INDEX              equ 0x70
-PORT_RTC_DATA               equ 0x71
-
-PORT_SYSTEM_CONTROL_A       equ 0x92
-PORT_SYSTEM_CONTROL_B       equ 0x61
 
 ;-------------------------------------------------------------------------------
 ; BIOS
