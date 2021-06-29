@@ -14,6 +14,7 @@ VT                          equ 11
 FF                          equ 12
 CR                          equ 13
 ESC                         equ 27
+DEL                         equ 127
 
 ;-------------------------------------------------------------------------------
 ; EFLAGS
@@ -117,6 +118,25 @@ ID_DPL1                     equ 0x20000000
 ID_DPL2                     equ 0x40000000
 ID_DPL3                     equ 0x60000000
 ID_PRESENT                  equ 0x80000000
+
+;-------------------------------------------------------------------------------
+; PAGE TABLE
+;-------------------------------------------------------------------------------
+
+PAGE_SIZE                   equ 4096
+
+PAGE_PRESENT                equ 0x001
+PAGE_RW                     equ 0x002
+PAGE_USER                   equ 0x004
+PAGE_WRITETHROUGH           equ 0x008
+PAGE_CACHEDISABLED          equ 0x010
+PAGE_ACCESSED               equ 0x020
+PAGE_DIRTY                  equ 0x040
+PAGE_LARGE                  equ 0x080
+PAGE_GLOBAL                 equ 0x100
+PAGE_AVAIL0                 equ 0x200
+PAGE_AVAIL1                 equ 0x400
+PAGE_AVAIL2                 equ 0x800
 
 ;-------------------------------------------------------------------------------
 ; I/O DELAY
@@ -283,12 +303,93 @@ CRTC_LIGHT_PEN_HIGH         equ 16
 CRTC_LIGHT_PEN_LOW          equ 17
 
 ;-------------------------------------------------------------------------------
+; BIOS DATA AREA
+;-------------------------------------------------------------------------------
+
+BDA_PORT_COM1               equ 0x00400
+BDA_PORT_COM2               equ 0x00402
+BDA_PORT_COM3               equ 0x00403
+BDA_PORT_COM4               equ 0x00404
+BDA_PORT_LPT1               equ 0x00408
+BDA_PORT_LPT2               equ 0x0040A
+BDA_PORT_LPT3               equ 0x0040C
+BDA_PORT_LPT4               equ 0x0040E ; PC/XT
+BDA_EBDA_SEGMENT            equ 0x0040E ; PS/2
+BDA_EQUIPMENT_WORD          equ 0x00410
+BDA_INFRARED_KB_ERRORS      equ 0x00412 ; PCjr
+BDA_MEMORY_SIZE             equ 0x00413
+BDA_PS2_BIOS_CONTROL_FLAGS  equ 0x00416
+BDA_KB_FLAGS                equ 0x00417
+BDA_KB_BUFFER_HEAD          equ 0x0041A
+BDA_KB_BUFFER_TAIL          equ 0x0041C
+BDA_KB_BUFFER               equ 0x0041E
+BDA_DRIVE_RECALIBRATION     equ 0x0043E
+BDA_DRIVE_MOTOR_STATUS      equ 0x0043F
+BDA_MOTOR_SHUTOFF_COUNTER   equ 0x00440
+BDA_PORT_CRTC               equ 0x00463
+
+;-------------------------------------------------------------------------------
+; DOS COMMUNICATION AREA
+;-------------------------------------------------------------------------------
+
+DCA_PRINT_SCREEN_STATUS     equ 0x00500
+
+;-------------------------------------------------------------------------------
+; LOADALL (80286)
+;-------------------------------------------------------------------------------
+
+LOADALL_MSW                 equ 0x00806
+LOADALL_TR                  equ 0x00816
+LOADALL_FLAGS               equ 0x00818
+LOADALL_IP                  equ 0x0081A
+LOADALL_LDT                 equ 0x0081C
+LOADALL_DS                  equ 0x0081E
+LOADALL_SS                  equ 0x00820
+LOADALL_CS                  equ 0x00822
+LOADALL_ES                  equ 0x00824
+LOADALL_DI                  equ 0x00826
+LOADALL_SI                  equ 0x00828
+LOADALL_BP                  equ 0x0082A
+LOADALL_SP                  equ 0x0082C
+LOADALL_BX                  equ 0x0082E
+LOADALL_DX                  equ 0x00830
+LOADALL_CX                  equ 0x00832
+LOADALL_AX                  equ 0x00834
+LOADALL_ES_DESCRIPTOR       equ 0x00836
+LOADALL_CS_DESCRIPTOR       equ 0x0083C
+LOADALL_SS_DESCRIPTOR       equ 0x00842
+LOADALL_GDTR                equ 0x0084E
+LOADALL_LDT_DESCRIPTOR      equ 0x00854
+LOADALL_IDTR                equ 0x0085A
+LOADALL_TSS_DESCRIPTOR      equ 0x00860
+
+;-------------------------------------------------------------------------------
 ; BIOS
 ;-------------------------------------------------------------------------------
+
+BIOS_10H_SET_VIDEO_MODE     equ 0x0000
+BIOS_10H_LOAD_8X8_FONT      equ 0x1112
+
+VIDEO_MODE_3                equ 0x0003
+
 
 BIOS_15H_DISABLE_A20        equ 0x2400
 BIOS_15H_ENABLE_A20         equ 0x2401
 BIOS_15H_A20_STATUS         equ 0x2402
 BIOS_15H_QUERY_A20_SUPPORT  equ 0x2403
+
+;-------------------------------------------------------------------------------
+; FILE ALLOCATION TABLE
+;-------------------------------------------------------------------------------
+
+ROOT_DIRECTORY_CLUSTER      equ 1
+
+DIRECTORY_ENTRY_NAME        equ 0x00
+DIRECTORY_ENTRY_EXT         equ 0x08
+DIRECTORY_ENTRY_ATTR        equ 0x0c
+DIRECTORY_ENTRY_TIME        equ 0x16
+DIRECTORY_ENTRY_DATE        equ 0x18
+DIRECTORY_ENTRY_CLUSTER     equ 0x1a
+DIRECTORY_ENTRY_SIZE        equ 0x1c
 
 %endif

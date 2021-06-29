@@ -2,30 +2,27 @@
 ; BOOT.SYS
 ;
 
-%include "defs.inc"
+;%define DEBUG_ELF_RELOC 1
 
-BOOTSYS_BASE equ 0x1000
+%include "defs.inc"
+%include "elf.inc"
+
+BOOTSYS_BASE  equ 0x00001000
+KERNEL_PHYS   equ 0x00010000
+KERNEL_VIRT   equ 0x80000000
+KERNEL_ENTRY  equ 0x80001000
 
 cpu   8086
 bits  16
 org   BOOTSYS_BASE
 
-ROOT_DIRECTORY_CLUSTER  equ 1
-
-DIRECTORY_ENTRY_NAME    equ 0x00
-DIRECTORY_ENTRY_EXT     equ 0x08
-DIRECTORY_ENTRY_ATTR    equ 0x0c
-DIRECTORY_ENTRY_TIME    equ 0x16
-DIRECTORY_ENTRY_DATE    equ 0x18
-DIRECTORY_ENTRY_CLUSTER equ 0x1a
-DIRECTORY_ENTRY_SIZE    equ 0x1c
-
 BOOTSYS_START:
   jmp 0000:Main
 
           db 0
-Signature db 13,10,'RX/386 BOOT LOADER ',__UTC_DATE__,' ',__UTC_TIME__,13,10
-Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',13,10,0
+Signature db CR,LF
+          db 'RX/386 BOOT LOADER ',__UTC_DATE__,' ',__UTC_TIME__,CR,LF
+          db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',CR,LF,0
 
 Main:
 .setup_registers:
@@ -39,6 +36,7 @@ Main:
   call InterruptSetup
   sti
 .print_signature:
+  call VideoSetup
   mov si, Signature
   call PrintString
 .detect_cpu:
@@ -55,6 +53,9 @@ Main:
   call FatPrint
 .load_kernel:
   call KernelLoad
+[cpu 386]
+  mov ebx, KERNEL_VIRT
+  call ElfLoad
   call FloppyMotorOff
 .prepare_for_protected_mode:
   cli
@@ -65,10 +66,9 @@ Main:
   call NmiMask
   call PicInitialize
 .enter_protected_mode:
-[cpu 386]
   lgdt [GDT_Register]
   mov eax, cr0
-  or eax, 0x00000001
+  or eax, CR0_PE
   mov cr0, eax
   jmp SELECTOR_CODE0:.in_protected_mode_32
 .in_protected_mode_32:
@@ -87,16 +87,29 @@ Main:
   mov eax, cr0
   or eax, CR0_PG
   mov cr0, eax
-  mov esp, 0x80010000
-  jmp SELECTOR_CODE0:0x80010000
+  mov esp, KERNEL_ENTRY
+  jmp SELECTOR_CODE0:KERNEL_ENTRY
 [bits 16]
 [cpu 8086]
-.done:
-  call HaltSystem
 
 ;-------------------------------------------------------------------------------
 ; BASIC INPUT/OUTPUT
 ;-------------------------------------------------------------------------------
+
+;
+; VideoSetup
+;
+VideoSetup:
+  push ax
+  push bx
+  ;mov ax, BIOS_10H_SET_VIDEO_MODE | VIDEO_MODE_3
+  ;int 0x10
+  mov ax, BIOS_10H_LOAD_8X8_FONT
+  xor bx, bx
+  int 0x10
+  pop bx
+  pop ax
+  ret
 
 ;
 ; Read charater from keyboard
@@ -218,7 +231,7 @@ FloppyMotorOff:
   mov si, MessageFloppyMotorWait
   call PrintString
 .loop_start:
-  mov al, [BiosDataArea+BDA_MOTOR_SHUTOFF_COUNTER]
+  mov al, [BDA_MOTOR_SHUTOFF_COUNTER]
   or al, al
   jz .loop_done
   hlt
@@ -358,7 +371,7 @@ FatPrint:
 ;
 HaltSystem:
   mov si, MessageSystemHalted
-  call PrintString
+  call PrintFormatted
 .next:
   cli
   hlt
@@ -505,7 +518,7 @@ PrintHex:
 ;
 ; PrintString
 ;
-;   DS:SI = zero-terminated string
+;   ES:SI = zero-terminated string
 ;
 PrintString:
   push ax
@@ -516,7 +529,7 @@ PrintString:
   push si
   push di
 .next:
-  mov al, [si]
+  mov al, [es:si]
   inc si
   or al, al
   jz .break
@@ -534,6 +547,12 @@ PrintString:
 
 ;
 ; PrintFormatted
+;
+;   DS:SI = zero-terminated format string
+;
+; Notes:
+;
+;   - Embedded strings (%s) point to strings in ES.
 ;
 PrintFormatted:
   push bp
@@ -762,6 +781,427 @@ KernelLoad:
   mov si, MessageKernelSysNotFound
   call PrintString
   call HaltSystem
+
+[cpu 386]
+
+;
+; ElfLoad - Relocate ELF object and build page table
+;
+; Assumptions:
+;
+; - .text and .date are page aligned
+; - relocation data follow section to be relocated
+; - .bss is the last section
+;
+; Calling Register:
+;
+;   EBX   Virtual Address [UNUSED - infered from SI]
+;
+; Local Variables:
+;
+;   BP-0  ELF32_E_SHSHNUM
+;   BP-2  ELF32_E_SHOFF
+;
+ElfLoad:
+.prologue:
+  pusha
+  push es
+  mov bp, sp
+  sub sp, 4
+  and esi, 0x0000ffff
+.body:
+  mov ax, KERNEL_PHYS >> 4
+  mov es, ax
+.elf_file_header:
+  mov ax, [es:ELF32_E_SHSTRNDX]
+  push ax
+  mov ax, [es:ELF32_E_SHSHNUM]
+  mov [bp-2], ax
+  push ax
+  mov ax, [es:ELF32_E_SHENTSIZE]
+  push ax
+  mov eax, [es:ELF32_E_SHOFF]
+  mov [bp-4], ax
+  push ax
+  shl eax, 16
+  push ax
+  mov eax, [es:ELF32_E_PHOFF]
+  push ax
+  shl eax, 16
+  push ax
+  mov eax, [es:ELF32_E_ENTRY]
+  push ax
+  shl eax, 16
+  push ax
+  mov si, .message_e
+  call PrintFormatted
+  add sp, 18
+.elf_alloc:
+  mov cx, [bp-2]
+  mov di, [bp-4]
+  mov edx, KERNEL_PHYS
+  push ebp
+  xor ebp, ebp
+  mov esi, PageTable8
+.elf_alloc_loop_start:
+  call ElfAlloc
+  add di, 40
+  dec cx
+  jz .print_sections
+  jmp .elf_alloc_loop_start
+.print_sections:
+  push word [SymbolTable+28]
+  push word [SymbolTable+30]
+  push word [SymbolTable+24]
+  push word [SymbolTable+26]
+  push word [SymbolTable+20]
+  push word [SymbolTable+22]
+  push word [SymbolTable+16]
+  push word [SymbolTable+18]
+  push word [SymbolTable+12]
+  push word [SymbolTable+14]
+  push word [SymbolTable+8]
+  push word [SymbolTable+10]
+  push word [SymbolTable+4]
+  push word [SymbolTable+6]
+  push word [SymbolTable]
+  push word [SymbolTable+2]
+  mov si, .message_s
+  call PrintFormatted
+  add sp, 32
+.elf_reloc:
+  pop ebp
+  mov cx, [bp-2]
+  mov di, [bp-4]
+  mov edx, KERNEL_PHYS
+  push ebp
+  xor ebp, ebp
+  dec ebp
+.elf_reloc_loop_start:
+  call ElfReloc
+  add di, 40
+  dec cx
+  jz .epilogue
+  jmp .elf_reloc_loop_start
+.epilogue:
+  pop ebp
+  add sp, 4
+  pop es
+  popa
+  ret
+.message_e:
+  db 'ELF32_E_ENTRY     = %h%hh',CR,LF
+  db 'ELF32_E_PHOFF     = %h%hh',CR,LF
+  db 'ELF32_E_SHOFF     = %h%hh',CR,LF
+  db 'ELF32_E_SHENTSIZE = %d',CR,LF
+  db 'ELF32_E_SHSHNUM   = %d',CR,LF
+  db 'ELF32_E_SHSTRNDX  = %d',CR,LF
+  db 0
+.message_s:
+  db '       PSYS      VIRT',CR,LF
+  db 'STACK: %h%h  %h%h',CR,LF
+  db 'TEXT : %h%h  %h%h',CR,LF
+  db 'DATA : %h%h  %h%h',CR,LF
+  db 'BSS  : %h%h  %h%h',CR,LF
+  db 0
+
+;
+; ElfAlloc - Setup page table using ELF sections
+;
+; Calling Register:
+;
+;    SI   Page Table
+;   EBX   Virtual Address
+;   EBP   SectionTable index
+;
+ElfAlloc:
+.prologue:
+  push eax
+  push ecx
+  push edx
+.print:
+  push si
+  push word [es:di+ELF32_SH_SIZE]
+  push word [es:di+ELF32_SH_OFFSET]
+  push word [es:di+ELF32_SH_ADDR]
+  push word [es:di+ELF32_SH_ADDR+2]
+  push word [es:di+ELF32_SH_LINK]
+  push word [es:di+ELF32_SH_INFO]
+  push word [es:di+ELF32_SH_FLAGS]
+  push word [es:di+ELF32_SH_TYPE]
+  mov si, .message_sh
+  call PrintFormatted
+  add sp, 16
+  pop si
+.dispatch:
+  mov eax, [es:di+ELF32_SH_TYPE]
+  cmp eax, ELF32_SHT_NULL
+  je .map_stack
+  cmp eax, ELF32_SHT_PROGBITS
+  je .map_pages
+  cmp eax, ELF32_SHT_NOBITS
+  je .map_pages
+  cmp eax, ELF32_SHT_REL
+  je .epilogue
+  cmp eax, ELF32_SHT_SYMTAB
+  je .epilogue
+  cmp eax, ELF32_SHT_STRTAB
+  je .epilogue
+.allocation_error:
+  mov si, .message_error
+  call PrintFormatted
+  call HaltSystem
+.map_stack:
+  inc word [es:di+ELF32_SH_SIZE]
+.map_pages:
+  mov edx, KERNEL_PHYS
+  add edx, [es:di+ELF32_SH_OFFSET]
+  mov [SymbolTable+8*ebp], edx
+  mov [SymbolTable+8*ebp+4], ebx
+  mov [es:di+ELF32_SH_ADDR], ebx
+  inc ebp
+  mov ecx, [es:di+ELF32_SH_SIZE]
+  test ecx, 0x00000fff
+  jz .map_pages_2
+  add ecx, 0x00001000
+.map_pages_2:
+  shr ecx, 12
+  or ecx, ecx
+  jmp .map_pages_loop_check
+.map_pages_loop_start:
+  ; debug message
+  push si
+  push si
+  mov eax, ebx
+  push ax
+  mov eax, ebx
+  shr eax, 16
+  push ax
+  mov eax, edx
+  push ax
+  mov eax, edx
+  shr eax, 16
+  push ax
+  mov si, .message_pt_progbits
+  call PrintFormatted
+  add sp, 10
+  pop si
+  ; map pages
+  mov eax, edx
+  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  mov [si], eax
+  add si, 4
+  add ebx, PAGE_SIZE
+  add edx, PAGE_SIZE
+  dec ecx
+.map_pages_loop_check:
+  jz .epilogue
+  jmp .map_pages_loop_start
+.epilogue:
+  pop edx
+  pop ecx
+  pop eax
+  ret
+.message_sh:
+  db 'TYPE=%h FLAGS=%h INFO=%h LINK=%h ADDR=%h%h OFFSET=%h SIZE=%h',CR,LF,0
+.message_pt_progbits:
+  db 'PHYS:%h%h @ VIRT:%h%h / PT:%h',CR,LF,0
+.message_error:
+  db 'ALLOCATION ERROR!',CR,LF,0
+
+;
+; ElfReloc - Apply relocations
+;
+; Calling Registers:
+;
+;   EBP   SectionTable index
+;
+ElfReloc:
+.prologue:
+  push eax
+  push ecx
+  push edx
+  push ebx
+.print:
+  push si
+  push word [es:di+ELF32_SH_SIZE]
+  push word [es:di+ELF32_SH_OFFSET]
+  push word [es:di+ELF32_SH_ADDR]
+  push word [es:di+ELF32_SH_ADDR+2]
+  push word [es:di+ELF32_SH_LINK]
+  push word [es:di+ELF32_SH_INFO]
+  push word [es:di+ELF32_SH_FLAGS]
+  push word [es:di+ELF32_SH_TYPE]
+  mov si, .message_sh
+  call PrintFormatted
+  add sp, 16
+  pop si
+.dispatch:
+  mov eax, [es:di+ELF32_SH_TYPE]
+  cmp eax, ELF32_SHT_NULL
+  je .next_section
+  cmp eax, ELF32_SHT_PROGBITS
+  je .next_section
+  cmp eax, ELF32_SHT_NOBITS
+  je .next_section
+  cmp eax, ELF32_SHT_REL
+  je .relocate
+  cmp eax, ELF32_SHT_SYMTAB
+  je .epilogue
+  cmp eax, ELF32_SHT_STRTAB
+  je .epilogue
+.relocation_error:
+  mov si, .message_error
+  call PrintFormatted
+  call HaltSystem
+.next_section:
+  inc ebp
+  jmp .epilogue
+.relocate:
+  xor edx, edx
+  mov eax, [es:di+ELF32_SH_SIZE]
+  mov ecx, [es:di+ELF32_SH_ENTSIZE]
+  div ecx
+  mov ecx, eax
+  jmp .relocate_loop_check
+.relocate_loop_start:
+  mov ebx, [es:di+ELF32_SH_OFFSET]
+  mov eax, [es:di+ELF32_SH_ENTSIZE]
+  mul ecx
+  add ebx, eax
+  push si
+  push word [es:bx+4] ; INFO
+  push word [es:bx] ; OFFSET
+  mov si, .message_r
+  ;call PrintFormatted
+  add sp, 4
+  pop si
+  mov eax, [es:bx] ; OFFSET
+  mov edx, [es:bx+4] ; INFO
+  call ElfRelocSymbol
+.relocate_loop_check:
+  sub ecx, 1
+  jc .epilogue
+  jmp .relocate_loop_start
+.epilogue:
+  pop ebx
+  pop edx
+  pop ecx
+  pop eax
+  ret
+.message_sh:
+  db 'TYPE=%h FLAGS=%h INFO=%h LINK=%h ADDR=%h%h OFFSET=%h SIZE=%h',CR,LF,0
+.message_r:
+  db 'RELOC: OFFSET=%h INFO=%h',CR,LF,0
+.message_error:
+  db 'RELOCATION ERROR!',CR,LF,0
+
+;
+; ElfRelocSymbol
+;
+; Calling Registers:
+;
+;   EAX   OFFSET (P)
+;   EDX   INFO
+;   EBP   SectionTabel index
+;
+ElfRelocSymbol:
+.prologue:
+  pushad
+.body:
+  xor ebx, ebx
+  mov bl, dh
+  xchg ebx, ebp
+  mov esi, [SymbolTable+8*ebx]
+  xchg ebx, ebp
+  mov edi, [SymbolTable+8*ebx+4] ; S
+  add esi, eax
+  mov ecx, [es:si] ; A (ES:SI ~ ESI)
+  mov ebx, ecx
+  cmp dl, ELF32_R_386_NONE
+  je .r_386_none
+  cmp dl, ELF32_R_386_32
+  je .r_386_32
+  cmp dl, ELF32_R_386_PC32
+  je .r_386_pc32
+  jmp .error
+.r_386_none:
+  jmp .epilogue
+.r_386_32:
+  add ecx, edi
+  mov [es:si], ecx ; S + A (ES:SI ~ ESI)
+%ifdef DEBUG_ELF_RELOC
+  push dx
+  push ax
+  mov eax, ecx
+  push ax
+  shr eax, 16
+  push ax
+  mov eax, ebx
+  push ax,
+  shr eax, 16
+  push ax
+  mov eax, edi
+  push ax
+  shr eax, 16
+  push ax
+  mov si, .message_r_386_32
+  call PrintFormatted
+  add sp, 16
+%endif
+  jmp .epilogue
+.r_386_pc32:
+  add ecx, edi
+  sub ecx, eax
+  mov [es:si], ecx ; S + A - P (ES:SI ~ ESI)
+%ifdef DEBUG_ELF_RELOC
+  mov esi, eax ; (P)
+  push dx
+  push ax
+  mov eax, ecx
+  push ax
+  shr eax, 16
+  push ax
+  mov eax, esi ; (P)
+  push ax
+  shr eax, 16
+  push ax
+  mov eax, ebx
+  push ax,
+  shr eax, 16
+  push ax
+  mov eax, edi
+  push ax
+  shr eax, 16
+  push ax
+  mov si, .message_r_386_pc32
+  call PrintFormatted
+  add sp, 20
+%endif
+  jmp .epilogue
+.epilogue:
+  popad
+  ret
+.error:
+  mov si, .message_error
+  call PrintFormatted
+  call HaltSystem
+.message_r_386_32:
+  db 'R_386_32  : (S)%h%h + (A)%h%h               = %h%h @ (P)%h [%h]',CR,LF,0
+.message_r_386_pc32:
+  db 'R_386_PC32: (S)%h%h + (A)%h%h - (P)%h%h = %h%h @ (P)%h [%h]',CR,LF,0
+.message_error:
+  db 'ElfRelocSymbol error',CR,LF,0
+
+[cpu 8086]
+
+section .bss
+
+; Symbol table holding .stack, .text, .data, .bss symbols.
+; FIXME: Use .symtab section.
+SymbolTable resd 8
+
+section .text
 
 ;-------------------------------------------------------------------------------
 ; INTERRUPT HANDLERS
@@ -1298,9 +1738,9 @@ A20Dump:
   call PrintString
   call HaltSystem
 .message_query_a20_support:
-  db 'A20: BX = %h',13,10,0
+  db 'A20: BX = %h',CR,LF,0
 .message_query_a20_support_not_supported:
-  db 'A20: could not query BIOS for A20 support (AH = %b)',13,10,0
+  db 'A20: could not query BIOS for A20 support (AH = %b)',CR,LF,0
 
 ;
 ; A20Disable
@@ -1354,9 +1794,9 @@ A20Test:
   pop ax
   ret
 .message_a20_enabled:
-  db "A20 is enabled",13,10,0
+  db "A20 is enabled",CR,LF,0
 .message_a20_disabled:
-  db "A20 is disabled",13,10,0
+  db "A20 is disabled",CR,LF,0
 
 ;-------------------------------------------------------------------------------
 ; PROGRAMMABLE INTERRUPT CONTROLLER (8259A)
@@ -1461,17 +1901,11 @@ PicDump:
   ret
 
 MessagePicDump:
-  db 'PIC STATUS [M] IRR=%b ISR=%b IMR=%b [S] IRR=%b ISR=%b IMR=%b',13,10,0
+  db 'PIC STATUS [M] IRR=%b ISR=%b IMR=%b [S] IRR=%b ISR=%b IMR=%b',CR,LF,0
 
 ;-------------------------------------------------------------------------------
 ; PAGING
 ;-------------------------------------------------------------------------------
-
-PAGE_PRESENT    equ 0x001
-PAGE_RW         equ 0x002
-PAGE_USER       equ 0x004
-PAGE_ACCESSED   equ 0x020
-PAGE_DIRTY      equ 0x040
 
 [cpu 386]
 [bits 32]
@@ -1499,7 +1933,7 @@ PageTableSetup:
   mov ecx, 1024
 .page_table_loop:
   mov [PageTable0+4*ecx-4], eax
-  mov [PageTable8+4*ecx-4], eax
+  ;mov [PageTable8+4*ecx-4], eax
   sub eax, 0x00001000
   loop .page_table_loop
 .epilogue:
@@ -1520,7 +1954,7 @@ FpuList:
   dw MessageFpuNotPresent, MessageFpu8087, MessageFpu80287, MessageFpu80387
 
 FileNameKernelSys:
-  db 'KERNEL  SYS'
+  db 'KERNEL  ELF'
 
 HexDigits:
   db '0123456789ABCDEF'
@@ -1529,9 +1963,10 @@ HexDigits:
 ; DESCRIPTOR TABLES
 ;-------------------------------------------------------------------------------
 
-SELECTOR_NULL   equ GDT.null - GDT.start
-SELECTOR_CODE0  equ GDT.code0 - GDT.start
-SELECTOR_DATA0  equ GDT.data0 - GDT.start
+SELECTOR_NULL       equ GDT.null        - GDT.start
+SELECTOR_NOTPRESENT equ GDT.notpresent  - GDT.start
+SELECTOR_DATA0      equ GDT.data0       - GDT.start
+SELECTOR_CODE0      equ GDT.code0       - GDT.start
 
 align 8
 GDT:
@@ -1539,18 +1974,21 @@ GDT:
 .null:
   dd 0
   dd 0
-.code0:
-  dw 0xffff
-  dw 0
-  db 0
-  db 10011010b
-  db 11001111b
-  db 0
+.notpresent:
+  dd 0
+  dd 0
 .data0:
   dw 0xffff
   dw 0
   db 0
   db 10010010b
+  db 11001111b
+  db 0
+.code0:
+  dw 0xffff
+  dw 0
+  db 0
+  db 10011010b
   db 11001111b
   db 0
 .end:
@@ -1566,10 +2004,10 @@ GDT_Register:
 ;-------------------------------------------------------------------------------
 
 MessageArithmeticOverflow:
-  db 'ARITHMETIC OVERFLOW',13,10,0
+  db 'ARITHMETIC OVERFLOW',CR,LF,0
 
 MessageBreakPoint:
-  db 'BREAKPOINT',13,10,0
+  db 'BREAKPOINT',CR,LF,0
 
 MessageCpu8086:
   db '8088/8086/80186',0
@@ -1584,13 +2022,13 @@ MessageCpu80486:
   db '80486 (or higher)',0
 
 MessageCpuFpu:
-  db 'CPU: %s    FPU: %s',13,10,0
+  db 'CPU: %s    FPU: %s',CR,LF,0
 
 MessageDebugDiskRead:
-  db 'DiskRead: D = %h, C = %d, H = %d, S = %d',13,10,0
+  db 'DiskRead: D = %h, C = %d, H = %d, S = %d',CR,LF,0
 
 MessageDiskError:
-  db 'DISK ERROR!',13,10,0
+  db 'DISK ERROR!',CR,LF,0
 
 MessageFpuNotPresent:
   db 'Not present',0
@@ -1605,49 +2043,49 @@ MessageFpu80387:
   db '80387 (or higher)',0
 
 MessageDiskParameters:
-  db 'Boot device %h (%d Heads, %d Sectors/Track, %d Bytes/Sector)',13,10,0
+  db 'Boot device %h (%d Heads, %d Sectors/Track, %d Bytes/Sector)',CR,LF,0
 
 MessageDivisionByZero:
-  db 'DIVISION BY ZERO',13,10,0
+  db 'DIVISION BY ZERO',CR,LF,0
 
 MessageFatParameters:
-  db '%d Sectors/Cluster, FAT @ %d, Root Directory @ %d, Data Area @ %d',13,10,0
+  db '%d Sectors/Cluster, FAT @ %d, Root Directory @ %d, Data Area @ %d',CR,LF,0
 
 MessageFloppyMotorWait:
-  db 'Waiting for floppy motor to stop...',13,10,0
+  db 'Waiting for floppy motor to stop...',CR,LF,0
 
 MessageIrqTimer:
-  db 'TICK!',13,10,0
+  db 'TICK!',CR,LF,0
 
 MessageKernelSysFile:
-  db 'KERNEL.SYS: Sectors = %d, Size = %d, Sector = %d, Cluster = %d',13,10,0
+  db 'KERNEL.ELF: Sectors = %d, Size = %d, Sector = %d, Cluster = %d',CR,LF,0
 
 MessageKernelSysNotFound:
-  db "KERNEL.SYS not found.",13,10,0
+  db "KERNEL.ELF not found.",CR,LF,0
 
 MessageMemorySize:
-  db '%d KiB conventional memory, %d KiB extended memory',13,10,0
+  db '%d KiB conventional memory, %d KiB extended memory',CR,LF,0
 
 MessageNonMaskableInterrupt:
-  db 'NON-MASKABLE INTERRUPT (B = %b, A = %b)',13,10,0
+  db 'NON-MASKABLE INTERRUPT (B = %b, A = %b)',CR,LF,0
 
 MessageNoCoprocessor:
-  db 'NO COPROCESSOR',13,10,0
+  db 'NO COPROCESSOR',CR,LF,0
 
 MessageNotImplemented:
-  db 'OPERATION NOT IMPLEMENTED (Line = %d)',13,10,0
+  db 'OPERATION NOT IMPLEMENTED (Line = %d)',CR,LF,0
 
 MessagePicInvalidBase:
-  db 'PicInitialize: Invalid base vector (BX = %h)',13,10,0
+  db 'PicInitialize: Invalid base vector (BX = %h)',CR,LF,0
 
 MessageSingleStep:
-  db 'SINGLE STEP',13,10,0
+  db 'SINGLE STEP',CR,LF,0
 
 MessageSystemHalted:
-  db 'SYSTEM HALTED!',13,10,0
+  db 'SYSTEM HALTED!',CR,LF,0
 
 MessageUndefinedInstruction:
-  db 'UNDEFINED INSTRUCTION',13,10,0
+  db 'UNDEFINED INSTRUCTION',CR,LF,0
 
 ;-------------------------------------------------------------------------------
 ; BLOCK STARTING SYMBOL
@@ -1669,7 +2107,7 @@ section .bss
   DirectoryCurrentEntry resw 1
   FileCurrentSector resw 1
 
-align 4096,resb 1
+align 4096, resb 1
   PageDirectory resd 1024
   PageTable0    resd 1024
   PageTable8    resd 1024
@@ -1776,10 +2214,6 @@ absolute 0x0000
   Int2FOff resw 1
   Int2FSeg resw 1
   InterruptVectors resd (256-48)
-  BiosDataArea resb 256
-  DosCommunicationArea resb 256
-
-BDA_MOTOR_SHUTOFF_COUNTER equ 0x40
 
 absolute 0x7000
   SectorBufferFAT resb 512
@@ -1806,5 +2240,5 @@ absolute 0x7c00
   BpbVolumeSerialNumber     resd 1
   BpbVolumeLabel            resb 11
   BpbFileSystem             resb 8
-; BpbBootCode
-; BpbSignature
+  BpbBootCode               resb 448
+  BpbSignature              resw 1

@@ -4,12 +4,12 @@
 
 %include "defs.inc"
 
-KERNEL_BASE equ 0x80010000
-USER_BASE   equ 0x00010000
-
 cpu   386
 bits  32
-org   KERNEL_BASE
+
+section .text   progbits  alloc   exec    nowrite   align=4096
+section .data   progbits  alloc   noexec  write     align=4096
+section .bss    nobits    alloc   noexec  write     align=4096
 
 section .text
 
@@ -1607,7 +1607,7 @@ DebugIRQ:
 ; CONSOLE
 ;-------------------------------------------------------------------------------
 
-CONSOLE_FRAMEBUFFER equ 0x800b8000
+CONSOLE_FRAMEBUFFER equ 0x000b8000 ; FIXME
 CONSOLE_COLS        equ 80
 CONSOLE_ROWS        equ 25
 CONSOLE_TABS        equ 8
