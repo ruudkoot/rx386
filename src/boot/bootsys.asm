@@ -103,11 +103,13 @@ Main:
 VideoSetup:
   push ax
   push bx
+%if CONSOLE_ROWS = 50
   ;mov ax, BIOS_10H_SET_VIDEO_MODE | VIDEO_MODE_3
   ;int 0x10
   mov ax, BIOS_10H_LOAD_8X8_FONT
   xor bx, bx
   int 0x10
+%endif
   pop bx
   pop ax
   ret
@@ -1924,17 +1926,21 @@ PageTableSetup:
   loop .page_directory_loop
 .page_directory_fill:
   mov eax, PageTable0
-  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  or eax, PAGE_PRESENT | PAGE_RW ; FIXME
   mov [PageDirectory], eax
   mov eax, PageTable8
   or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
   mov [PageDirectory+4*512], eax
+  mov eax, PageTableC
+  or eax, PAGE_PRESENT | PAGE_RW
+  mov [PageDirectory+4*768], eax
 .page_table:
   mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
   mov ecx, 1024
 .page_table_loop:
   mov [PageTable0+4*ecx-4], eax
   ;mov [PageTable8+4*ecx-4], eax
+  mov [PageTableC+4*ecx-4], eax
   sub eax, 0x00001000
   loop .page_table_loop
 .epilogue:
@@ -2112,6 +2118,7 @@ align 4096, resb 1
   PageDirectory resd 1024
   PageTable0    resd 1024
   PageTable8    resd 1024
+  PageTableC    resd 1024
 
 ;-------------------------------------------------------------------------------
 ; ABSOLUTE

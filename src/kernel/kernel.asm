@@ -1610,7 +1610,7 @@ DebugIRQ:
 ; CONSOLE
 ;-------------------------------------------------------------------------------
 
-CONSOLE_FRAMEBUFFER equ 0x000b8000 ; FIXME
+CONSOLE_FRAMEBUFFER equ 0xC00B8000
 
 section .text
 
