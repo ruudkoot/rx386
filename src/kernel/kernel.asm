@@ -2,6 +2,7 @@
 ; KERNEL.SYS
 ;
 
+%include "config.inc"
 %include "defs.inc"
 
 cpu   386
@@ -1608,9 +1609,6 @@ DebugIRQ:
 ;-------------------------------------------------------------------------------
 
 CONSOLE_FRAMEBUFFER equ 0x000b8000 ; FIXME
-CONSOLE_COLS        equ 80
-CONSOLE_ROWS        equ 25
-CONSOLE_TABS        equ 8
 
 section .text
 
@@ -1713,7 +1711,7 @@ ConsoleOut:
 section .data
 
 ConsoleCursorCol  dd 0
-ConsoleCursorRow  dd 24
+ConsoleCursorRow  dd CONSOLE_ROWS - 1
 ConsoleAttr       dd 0x07
 
 ;-------------------------------------------------------------------------------

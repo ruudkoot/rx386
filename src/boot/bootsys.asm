@@ -4,6 +4,7 @@
 
 ;%define DEBUG_ELF_RELOC 1
 
+%include "config.inc"
 %include "defs.inc"
 %include "elf.inc"
 
