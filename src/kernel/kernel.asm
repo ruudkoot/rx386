@@ -1589,6 +1589,8 @@ section .data
 MessagePanic1:
   db '! EXCEPTION %s    ERROR CODE %h',CR,LF,0
 
+section .text
+
 ;
 ; DebugIRQ
 ;
