@@ -55,4 +55,4 @@ DummyData db 'DUMMY',0
 
 section .bss
 
-DummyBSS resb 1
+Stack resd 1024

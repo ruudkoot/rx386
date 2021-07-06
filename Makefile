@@ -18,8 +18,8 @@ dist/disk.img: dist/bootsect.bin dist/boot.sys dist/kernel.elf dist/user.elf
 dist/bootsect.bin: src/boot/bootsect.asm
 	nasm src/boot/bootsect.asm -f bin -i src/include/ -o dist/bootsect.bin
 
-dist/boot.sys: src/boot/bootsys.asm src/include/config.inc src/include/defs.inc src/include/elf.inc
-	nasm src/boot/bootsys.asm -f bin -i src/include/ -o dist/boot.sys
+dist/boot.sys: src/boot/boot.asm src/include/config.inc src/include/defs.inc src/include/elf.inc
+	nasm src/boot/boot.asm -f bin -i src/include/ -o dist/boot.sys
 
 dist/kernel.elf: src/kernel/kernel.asm src/include/config.inc src/include/defs.inc
 	nasm src/kernel/kernel.asm -f elf -i src/include/ -o dist/kernel.elf

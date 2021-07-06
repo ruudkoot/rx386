@@ -58,11 +58,11 @@ Main:
 [cpu 386]
   mov edx, KERNEL_PHYS
   mov ebx, KERNEL_VIRT
-  mov esi, PageTable8
+  mov esi, PageTable8+0
   call ElfLoad
   mov edx, USER_PHYS
   mov ebx, USER_VIRT
-  mov esi, PageTable4
+  mov esi, PageTable4+1
   call ElfLoad
   xor esi, esi
   call FloppyMotorOff
@@ -826,7 +826,7 @@ FileLoad:
 ;
 ;   EDX   Physical Address
 ;   EBX   Virtual Address [UNUSED - infered from SI]
-;   ESI   Page Table
+;   ESI   Page Table + U/S
 ;
 ; Local Variables:
 ;
@@ -874,7 +874,6 @@ ElfLoad:
   mov di, [bp-4]
   push ebp
   xor ebp, ebp
-  ;mov esi, PageTable8
 .elf_alloc_loop_start:
   call ElfAlloc
   add di, 40
@@ -941,7 +940,7 @@ ElfLoad:
 ;
 ; Calling Register:
 ;
-;    SI   Page Table
+;    SI   Page Table + U/S
 ;   EDX   Physical Address
 ;   EBX   Virtual Address
 ;   EBP   SectionTable index
@@ -986,7 +985,6 @@ ElfAlloc:
 .map_stack:
   inc word [es:di+ELF32_SH_SIZE]
 .map_pages:
-  ;mov edx, KERNEL_PHYS
   add edx, [es:di+ELF32_SH_OFFSET]
   mov [SymbolTable+8*ebp], edx
   mov [SymbolTable+8*ebp+4], ebx
@@ -1020,9 +1018,19 @@ ElfAlloc:
   pop si
   ; map pages
   mov eax, edx
-  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  test si, 0x0001
+  jz .supervisor
+.user:
+  dec si
+  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER
+  mov [si], eax
+  add si, 5
+  jmp .continue
+.supervisor:
+  or eax, PAGE_PRESENT | PAGE_RW
   mov [si], eax
   add si, 4
+.continue:
   add ebx, PAGE_SIZE
   add edx, PAGE_SIZE
   dec ecx
@@ -1218,10 +1226,12 @@ ElfRelocSymbol:
   mov si, .message_error
   call PrintFormatted
   call HaltSystem
+%ifdef DEBUG_ELF_RELOC
 .message_r_386_32:
   db 'R_386_32  : (S)%h%h + (A)%h%h               = %h%h @ (P)%h [%h]',CR,LF,0
 .message_r_386_pc32:
   db 'R_386_PC32: (S)%h%h + (A)%h%h - (P)%h%h = %h%h @ (P)%h [%h]',CR,LF,0
+%endif
 .message_error:
   db 'ElfRelocSymbol error',CR,LF,0
 
@@ -1955,19 +1965,19 @@ PageTableSetup:
   loop .page_directory_loop
 .page_directory_fill:
   mov eax, PageTable0
-  or eax, PAGE_PRESENT | PAGE_RW ; FIXME
+  or eax, PAGE_PRESENT | PAGE_RW
   mov [PageDirectory+0x000], eax
   mov eax, PageTable4
-  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER
   mov [PageDirectory+0x400], eax
   mov eax, PageTable8
-  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  or eax, PAGE_PRESENT | PAGE_RW
   mov [PageDirectory+0x800], eax
   mov eax, PageTableC
   or eax, PAGE_PRESENT | PAGE_RW
   mov [PageDirectory+0xC00], eax
 .page_table:
-  mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW
   mov ecx, 1024
 .page_table_loop:
   mov [PageTable0+4*ecx-4], eax
@@ -2135,20 +2145,20 @@ MessageUndefinedInstruction:
 ;-------------------------------------------------------------------------------
 
 section .bss
-  FpuScratch resw 1
-  DiskBiosDriveNumber resw 1
-  DiskNumberOfHeads resw 1
-  DiskSectorsPerTrack resw 1
-  DiskBytesPerSector resw 1
-  FatSectorsPerCluster resw 1
+  FpuScratch                        resw 1
+  DiskBiosDriveNumber               resw 1
+  DiskNumberOfHeads                 resw 1
+  DiskSectorsPerTrack               resw 1
+  DiskBytesPerSector                resw 1
+  FatSectorsPerCluster              resw 1
   FatFirstFileAllocationTableSector resw 1
-  FatFirstRootDirectorySector resw 1
-  FatFirstDataAreaSector resw 1
-  DirectoryFirstSector resw 1
-  DirectoryCurrentSector resw 1
-  ;DirectoryTotalEntries resw 1
-  DirectoryCurrentEntry resw 1
-  FileCurrentSector resw 1
+  FatFirstRootDirectorySector       resw 1
+  FatFirstDataAreaSector            resw 1
+  DirectoryFirstSector              resw 1
+  DirectoryCurrentSector            resw 1
+  ;DirectoryTotalEntries             resw 1
+  DirectoryCurrentEntry             resw 1
+  FileCurrentSector                 resw 1
 
 align 4096, resb 1
   PageDirectory resd 1024
@@ -2258,11 +2268,10 @@ absolute 0x0000
   Int2ESeg resw 1
   Int2FOff resw 1
   Int2FSeg resw 1
-  InterruptVectors resd (256-48)
 
 absolute 0x7000
-  SectorBufferFAT resb 512
-  SectorBufferDirectory resb 512
+  SectorBufferFAT           resb 512
+  SectorBufferDirectory     resb 512
 
 absolute 0x7c00
   BpbJump                   resb 3

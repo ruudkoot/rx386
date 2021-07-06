@@ -40,12 +40,6 @@ Main:
 .body:
   mov esi, Signature
   call PrintString
-  ;call TestExceptionDE
-  ;call TestExceptionDB_1
-  ;call TestExceptionDB_2
-  ;call TestInterruptNMI
-  ;call TestExceptionGP
-  ;call TestExceptionPF
 .enable_irqs:
   mov al, 0xfc
   out PORT_PIC_MASTER_DATA, al
@@ -57,24 +51,6 @@ Main:
   mov [TCB.thread2+TCB_CR3], eax
   mov [TCB.thread3+TCB_CR3], eax
   mov [TCB.thread4+TCB_CR3], eax
-.debug:
-  ;push Thread4_Stack.top
-  ;push Thread4_Stack.bottom
-  ;push Thread3_Stack.top
-  ;push Thread3_Stack.bottom
-  ;push Thread2_Stack.top
-  ;push Thread2_Stack.bottom
-  ;push Thread1_Stack.top
-  ;push Thread1_Stack.bottom
-  ;push Thread4
-  ;push Thread3
-  ;push Thread2
-  ;push Thread1
-  ;push KernelStack.top
-  ;push KernelStack.bottom
-  ;push esp
-  ;mov esi, .message
-  ;call PrintFormatted
 .enter_ring3:
   mov eax, SELECTOR_TSS | 3
   ltr ax
@@ -84,7 +60,7 @@ Main:
   mov fs, ax
   mov gs, ax
   push SELECTOR_DATA3 | 3
-  push Thread1_Stack.top
+  push USER_STACK+1*1024
   pushf
   pop eax
   or eax, EFLAGS_IF
@@ -92,99 +68,10 @@ Main:
   push SELECTOR_CODE3 | 3
   push USER_ENTRY+0x0100
   iret
-.epilogue:
-  jmp HaltSystem
-.message:
-  ;db 'ESP = %h',CR,LF
-  ;db 'KernelStack.bottom = %h',CR,LF
-  ;db 'KernelStack.top = %h',CR,LF
-  ;db 'Thread1 = %h',CR,LF
-  ;db 'Thread2 = %h',CR,LF
-  ;db 'Thread3 = %h',CR,LF
-  ;db 'Thread4 = %h',CR,LF
-  ;db 'Thread1_Stack.bottom = %h',CR,LF
-  ;db 'Thread1_Stack.top = %h',CR,LF
-  ;db 'Thread2_Stack.bottom = %h',CR,LF
-  ;db 'Thread2_Stack.top = %h',CR,LF
-  ;db 'Thread3_Stack.bottom = %h',CR,LF
-  ;db 'Thread3_Stack.top = %h',CR,LF
-  ;db 'Thread4_Stack.bottom = %h',CR,LF
-  ;db 'Thread4_Stack.top = %h',CR,LF
-  ;db 0
-
-;-------------------------------------------------------------------------------
-; USER MODE
-;-------------------------------------------------------------------------------
-
-section .text
-
-Thread1:
-  mov al, '1'
-  int SYSCALL_CONSOLEOUT
-  ;mov al, 'A'
-  ;int SYSCALL_CONSOLEOUT
-  jmp Thread1
-Thread2:
-  mov al, '2'
-  int SYSCALL_CONSOLEOUT
-  ;mov al, 'B'
-  ;int SYSCALL_CONSOLEOUT
-  jmp Thread2
-Thread3:
-  mov al, '3'
-  int SYSCALL_CONSOLEOUT
-  ;mov al, 'C'
-  ;int SYSCALL_CONSOLEOUT
-  jmp Thread3
-Thread4:
-  mov al, '4'
-  int SYSCALL_CONSOLEOUT
-  ;mov al, 'D'
-  ;int SYSCALL_CONSOLEOUT
-  jmp Thread4
-
-section .bss
-
-align 4
-Thread1_Stack:
-.bottom:
-  resd 256
-.top:
-Thread2_Stack:
-.bottom:
-  resd 256
-.top:
-Thread3_Stack:
-.bottom:
-  resd 256
-.top:
-Thread4_Stack:
-.bottom:
-  resd 256
-.top:
 
 ;-------------------------------------------------------------------------------
 ; THREAD CONTROL BLOCKS
 ;-------------------------------------------------------------------------------
-
-TCB_NEXT    equ 0
-TCB_CR3     equ 4
-TCB_EIP     equ 8
-TCB_EFLAGS  equ 12
-TCB_EAX     equ 16
-TCB_ECX     equ 20
-TCB_EDX     equ 24
-TCB_EBX     equ 28
-TCB_ESP     equ 32
-TCB_EBP     equ 36
-TCB_ESI     equ 40
-TCB_EDI     equ 44
-TCB_CS      equ 48
-TCB_DS      equ 52
-TCB_ES      equ 56
-TCB_FS      equ 60
-TCB_GS      equ 64
-TCB_SS      equ 68
 
 section .data
 
@@ -202,7 +89,7 @@ TCB:
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd Thread1_Stack.top  ; ESP
+  dd USER_STACK+1*1024  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
@@ -221,7 +108,7 @@ TCB:
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd Thread2_Stack.top  ; ESP
+  dd USER_STACK+2*1024  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
@@ -240,7 +127,7 @@ TCB:
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd Thread3_Stack.top  ; ESP
+  dd USER_STACK+3*1024  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
@@ -259,7 +146,7 @@ TCB:
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd Thread4_Stack.top  ; ESP
+  dd USER_STACK+4*1024  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
@@ -893,9 +780,6 @@ IRQ0:
   mov fs, ax
   mov gs, ax
   mov ebp, esp
-  ;mov esi, .message
-  ;call PrintFormatted
-  ;call HaltSystem
 .body:
   mov al, 0
   call DebugIRQ
@@ -968,9 +852,6 @@ IRQ0:
   mov [ebp+4], eax
   mov eax, [ebx+TCB_EDI]
   mov [ebp+0], eax
-  ;mov esi, .message
-  ;call PrintFormatted
-  ;call HaltSystem
 .eoi:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
@@ -981,27 +862,6 @@ IRQ0:
   pop es
   pop ds
   iret
-.message:
-  ;db CR,LF
-  ;db "IRQ0: EDI    = %h",CR,LF
-  ;db "IRQ0: ESI    = %h",CR,LF
-  ;db "IRQ0: EBP    = %h",CR,LF
-  ;db "IRQ0: ESP    = %h",CR,LF
-  ;db "IRQ0: EBX    = %h",CR,LF
-  ;db "IRQ0: EDX    = %h",CR,LF
-  ;db "IRQ0: ECX    = %h",CR,LF
-  ;db "IRQ0: EAX    = %h",CR,LF
-  ;db "IRQ0: GS     = %h",CR,LF
-  ;db "IRQ0: FS     = %h",CR,LF
-  ;db "IRQ0: ES     = %h",CR,LF
-  ;db "IRQ0: DS     = %h",CR,LF
-  ;db "IRQ0: EIP    = %h",CR,LF
-  ;db "IRQ0: CS     = %h",CR,LF
-  ;db "IRQ0: EFLAGS = %h",CR,LF
-  ;db "IRQ0: ESP3   = %h",CR,LF
-  ;db "IRQ0: SS3    = %h",CR,LF
-  ;db 0
-
 
 ; Interrupt
 align 4
@@ -1820,69 +1680,3 @@ PrintFormatted:
 section .data
 
 HexDigits db '0123456789ABCDEF'
-
-;-------------------------------------------------------------------------------
-; TESTS
-;-------------------------------------------------------------------------------
-
-;
-; TestExceptionDE - Raise Divide-by-zero Error
-;
-TestExceptionDE:
-  pusha
-  xor eax, eax
-  xor edx, edx
-  xor ebx, ebx
-  div ebx
-  popa
-  ret
-
-TestExceptionDB_1:
-  pusha
-  icebp
-  popa
-  ret
-
-TestExceptionDB_2:
-  pusha
-  pushf
-  pop eax
-  or eax, 0x00000100
-  push eax
-  popf
-  nop
-  pushf
-  pop eax
-  and eax, 0xfffffeff
-  push eax
-  popf
-  popa
-  ret
-
-;
-; TestInterruptNMI - Raise a non-maskable interrupt
-;
-TestInterruptNMI:
-  pusha
-  pushf
-  cli
-  int 2
-  popf
-  popa
-  ret
-
-TestExceptionGP:
-  pusha
-  xor eax, eax
-  mov ax, fs
-  push eax
-  xor eax, eax
-  mov fs, ax
-  xor eax, eax
-  push eax
-  mov [fs:0xc000000], eax
-  pop eax
-  pop eax
-  mov fs, ax
-  popa
-  ret
