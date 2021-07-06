@@ -1,9 +1,10 @@
 ;
-; KERNEL.SYS
+; KERNEL.ELF
 ;
 
 %include "config.inc"
 %include "defs.inc"
+%include "kernel.inc"
 
 cpu   386
 bits  32
@@ -89,7 +90,7 @@ Main:
   or eax, EFLAGS_IF
   push eax
   push SELECTOR_CODE3 | 3
-  push Thread1
+  push USER_ENTRY+0x0100
   iret
 .epilogue:
   jmp HaltSystem
@@ -195,7 +196,7 @@ TCB:
 .thread1:
   dd .thread2           ; NEXT
   dd 0x00000000         ; CR3
-  dd Thread1            ; EIP
+  dd USER_ENTRY+0x0100  ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
@@ -214,7 +215,7 @@ TCB:
 .thread2:
   dd .thread3           ; NEXT
   dd 0x00000000         ; CR3
-  dd Thread2            ; EIP
+  dd USER_ENTRY+0x0200  ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
@@ -233,7 +234,7 @@ TCB:
 .thread3:
   dd .thread4           ; NEXT
   dd 0x00000000         ; CR3
-  dd Thread3            ; EIP
+  dd USER_ENTRY+0x0300  ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
@@ -252,7 +253,7 @@ TCB:
 .thread4:
   dd .thread1           ; NEXT
   dd 0x00000000         ; CR3
-  dd Thread4            ; EIP
+  dd USER_ENTRY+0x0400  ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
@@ -1281,8 +1282,6 @@ IdtShuffle:
   ret
 
 section .data
-
-SYSCALL_CONSOLEOUT  equ (IDT.syscall_console_out - IDT.start) / 8
 
 align 8
 IDT:

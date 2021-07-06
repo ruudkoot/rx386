@@ -1,0 +1,13 @@
+BOOT_SEG            equ 0x0000
+BOOT_BASE           equ 0x00001000
+BOOT_STACK          equ 0x00010000
+
+KERNEL_PHYS         equ 0x00010000
+KERNEL_VIRT         equ 0x80000000
+KERNEL_ENTRY        equ 0x80001000
+
+USER_PHYS           equ 0x00020000
+USER_VIRT           equ 0x40000000
+USER_ENTRY          equ 0x40001000
+
+SYSCALL_CONSOLEOUT  equ 0x30

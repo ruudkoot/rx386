@@ -7,18 +7,14 @@
 %include "config.inc"
 %include "defs.inc"
 %include "elf.inc"
-
-BOOTSYS_BASE  equ 0x00001000
-KERNEL_PHYS   equ 0x00010000
-KERNEL_VIRT   equ 0x80000000
-KERNEL_ENTRY  equ 0x80001000
+%include "kernel.inc"
 
 cpu   8086
 bits  16
-org   BOOTSYS_BASE
+org   BOOT_BASE
 
-BOOTSYS_START:
-  jmp 0000:Main
+BOOT_START:
+  jmp BOOT_SEG:Main
 
           db 0
 Signature db CR,LF
@@ -53,10 +49,22 @@ Main:
   call FatInit
   call FatPrint
 .load_kernel:
-  call KernelLoad
+  mov si, FileNameKernel
+  mov bx, KERNEL_PHYS >> 4
+  call FileLoad
+  mov si, FileNameUser
+  mov bx, USER_PHYS >> 4
+  call FileLoad
 [cpu 386]
+  mov edx, KERNEL_PHYS
   mov ebx, KERNEL_VIRT
+  mov esi, PageTable8
   call ElfLoad
+  mov edx, USER_PHYS
+  mov ebx, USER_VIRT
+  mov esi, PageTable4
+  call ElfLoad
+  xor esi, esi
   call FloppyMotorOff
 .prepare_for_protected_mode:
   cli
@@ -80,7 +88,7 @@ Main:
   mov fs, ax
   mov gs, ax
   mov ss, ax
-  mov esp, 0x00010000
+  mov esp, BOOT_STACK
 .enable_paging:
   call PageTableSetup
   mov eax, PageDirectory
@@ -642,12 +650,12 @@ FatClusterToSector:
 ; DirectoryOpen
 ;
 ;   AX = cluster
-;   CX = total entries
+;   CX = total entries (currently not used)
 ;
 DirectoryOpen:
   call FatClusterToSector
   mov [DirectoryFirstSector], ax
-  mov [DirectoryTotalEntries], cx
+  ;mov [DirectoryTotalEntries], cx
   ret
 
 ;
@@ -711,8 +719,9 @@ DirectorySearch:
 ;
 ; Calling Registers:
 ;
-;   SI = pointer to directory entry
-;   ES:DI = target to load file to
+;   CX      file name
+;   SI      pointer to directory entry
+;   ES:DI   target to load file to
 ;
 ; To do:
 ;
@@ -724,6 +733,10 @@ FileRead:
   push dx
   push bx
   push si
+  push bp
+  mov bp, es
+  mov ax, BOOT_SEG
+  mov es, ax
   mov ax, [si+DIRECTORY_ENTRY_CLUSTER]
   push ax
   call FatClusterToSector
@@ -738,14 +751,19 @@ FileRead:
   inc ax
 .no_slack:
   push ax
-  mov si, MessageKernelSysFile
+  mov si, cx
+  push si
+  mov si, MessageFileInfo
   call PrintFormatted
+  add sp, 2
   pop cx
   add sp, 2
   pop ax
   add sp, 2
   mov bx, di
+  mov es, bp
   call DiskRead
+  pop bp
   pop si
   pop bx
   pop dx
@@ -753,37 +771,45 @@ FileRead:
   pop ax
   ret
 
-;-------------------------------------------------------------------------------
-; ENTER KERNEL
-;-------------------------------------------------------------------------------
-
 ;
-; KernelLoad
+; FileLoad
 ;
-KernelLoad:
+; Calling Registers:
+;
+;   BX  segment to load to
+;   SI  file name
+;
+FileLoad:
   push ax
+  push bx
   push si
   push di
+  mov cx, si
   mov ax, ROOT_DIRECTORY_CLUSTER
   call DirectoryOpen
-  mov si, FileNameKernelSys
   call DirectorySearch
-  jc .kernel_sys_not_found
+  jc .file_not_found
   mov si, di
-  mov ax, 0x1000
   push es
-  mov es, ax
+  mov es, bx
   xor di, di
   call FileRead
   pop es
   pop di
   pop si
+  pop bx
   pop ax
   ret
-.kernel_sys_not_found:
-  mov si, MessageKernelSysNotFound
-  call PrintString
+.file_not_found:
+  push si
+  mov si, MessageFileNotFound
+  call PrintFormatted
+  pop si
   call HaltSystem
+
+;-------------------------------------------------------------------------------
+; EXECUTABLE AND LINKING FORMAT
+;-------------------------------------------------------------------------------
 
 [cpu 386]
 
@@ -798,24 +824,27 @@ KernelLoad:
 ;
 ; Calling Register:
 ;
+;   EDX   Physical Address
 ;   EBX   Virtual Address [UNUSED - infered from SI]
+;   ESI   Page Table
 ;
 ; Local Variables:
 ;
-;   BP-0  ELF32_E_SHSHNUM
-;   BP-2  ELF32_E_SHOFF
+;   BP-2  ELF32_E_SHSHNUM
+;   BP-4  ELF32_E_SHOFF
 ;
 ElfLoad:
 .prologue:
-  pusha
+  pushad
   push es
   mov bp, sp
   sub sp, 4
-  and esi, 0x0000ffff
 .body:
-  mov ax, KERNEL_PHYS >> 4
+  mov eax, edx
+  shr eax, 4
   mov es, ax
 .elf_file_header:
+  push esi
   mov ax, [es:ELF32_E_SHSTRNDX]
   push ax
   mov ax, [es:ELF32_E_SHSHNUM]
@@ -836,16 +865,16 @@ ElfLoad:
   push ax
   shl eax, 16
   push ax
-  mov si, .message_e
+  mov esi, .message_e
   call PrintFormatted
   add sp, 18
+  pop esi
 .elf_alloc:
   mov cx, [bp-2]
   mov di, [bp-4]
-  mov edx, KERNEL_PHYS
   push ebp
   xor ebp, ebp
-  mov esi, PageTable8
+  ;mov esi, PageTable8
 .elf_alloc_loop_start:
   call ElfAlloc
   add di, 40
@@ -869,14 +898,13 @@ ElfLoad:
   push word [SymbolTable+6]
   push word [SymbolTable]
   push word [SymbolTable+2]
-  mov si, .message_s
+  mov esi, .message_s
   call PrintFormatted
   add sp, 32
 .elf_reloc:
   pop ebp
   mov cx, [bp-2]
   mov di, [bp-4]
-  mov edx, KERNEL_PHYS
   push ebp
   xor ebp, ebp
   dec ebp
@@ -890,7 +918,7 @@ ElfLoad:
   pop ebp
   add sp, 4
   pop es
-  popa
+  popad
   ret
 .message_e:
   db 'ELF32_E_ENTRY     = %h%hh',CR,LF
@@ -914,6 +942,7 @@ ElfLoad:
 ; Calling Register:
 ;
 ;    SI   Page Table
+;   EDX   Physical Address
 ;   EBX   Virtual Address
 ;   EBP   SectionTable index
 ;
@@ -957,7 +986,7 @@ ElfAlloc:
 .map_stack:
   inc word [es:di+ELF32_SH_SIZE]
 .map_pages:
-  mov edx, KERNEL_PHYS
+  ;mov edx, KERNEL_PHYS
   add edx, [es:di+ELF32_SH_OFFSET]
   mov [SymbolTable+8*ebp], edx
   mov [SymbolTable+8*ebp+4], ebx
@@ -1204,11 +1233,11 @@ section .bss
 ; FIXME: Use .symtab section.
 SymbolTable resd 8
 
-section .text
-
 ;-------------------------------------------------------------------------------
 ; INTERRUPT HANDLERS
 ;-------------------------------------------------------------------------------
+
+section .text
 
 InterruptSetup:
   push ax
@@ -1927,18 +1956,22 @@ PageTableSetup:
 .page_directory_fill:
   mov eax, PageTable0
   or eax, PAGE_PRESENT | PAGE_RW ; FIXME
-  mov [PageDirectory], eax
+  mov [PageDirectory+0x000], eax
+  mov eax, PageTable4
+  or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
+  mov [PageDirectory+0x400], eax
   mov eax, PageTable8
   or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
-  mov [PageDirectory+4*512], eax
+  mov [PageDirectory+0x800], eax
   mov eax, PageTableC
   or eax, PAGE_PRESENT | PAGE_RW
-  mov [PageDirectory+4*768], eax
+  mov [PageDirectory+0xC00], eax
 .page_table:
   mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW | PAGE_USER ; FIXME
   mov ecx, 1024
 .page_table_loop:
   mov [PageTable0+4*ecx-4], eax
+  ;mov [PageTable4+4*ecx-4], eax
   ;mov [PageTable8+4*ecx-4], eax
   mov [PageTableC+4*ecx-4], eax
   sub eax, 0x00001000
@@ -1960,8 +1993,11 @@ CpuList:
 FpuList:
   dw MessageFpuNotPresent, MessageFpu8087, MessageFpu80287, MessageFpu80387
 
-FileNameKernelSys:
-  db 'KERNEL  ELF'
+FileNameKernel:
+  db 'KERNEL  ELF',0
+
+FileNameUser:
+  db 'USER    ELF',0
 
 HexDigits:
   db '0123456789ABCDEF'
@@ -2058,17 +2094,17 @@ MessageDivisionByZero:
 MessageFatParameters:
   db '%d Sectors/Cluster, FAT @ %d, Root Directory @ %d, Data Area @ %d',CR,LF,0
 
+MessageFileInfo:
+  db '%s: Sectors = %d, Size = %d, Sector = %d, Cluster = %d',CR,LF,0
+
+MessageFileNotFound:
+  db "%s not found.",CR,LF,0
+
 MessageFloppyMotorWait:
   db 'Waiting for floppy motor to stop...',CR,LF,0
 
 MessageIrqTimer:
   db 'TICK!',CR,LF,0
-
-MessageKernelSysFile:
-  db 'KERNEL.ELF: Sectors = %d, Size = %d, Sector = %d, Cluster = %d',CR,LF,0
-
-MessageKernelSysNotFound:
-  db "KERNEL.ELF not found.",CR,LF,0
 
 MessageMemorySize:
   db '%d KiB conventional memory, %d KiB extended memory',CR,LF,0
@@ -2110,13 +2146,14 @@ section .bss
   FatFirstDataAreaSector resw 1
   DirectoryFirstSector resw 1
   DirectoryCurrentSector resw 1
-  DirectoryTotalEntries resw 1
+  ;DirectoryTotalEntries resw 1
   DirectoryCurrentEntry resw 1
   FileCurrentSector resw 1
 
 align 4096, resb 1
   PageDirectory resd 1024
   PageTable0    resd 1024
+  PageTable4    resd 1024
   PageTable8    resd 1024
   PageTableC    resd 1024
 
