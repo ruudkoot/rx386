@@ -7,9 +7,9 @@ KERNEL_VIRT         equ 0x80000000
 KERNEL_ENTRY        equ 0x80001000
 
 USER_PHYS           equ 0x00020000
-USER_VIRT           equ 0x40000000
-USER_ENTRY          equ 0x40001000
-USER_STACK          equ 0x40003000
+USER_VIRT           equ 0x00000000
+USER_ENTRY          equ 0x00001000
+USER_STACK          equ 0x00003000
 
 SYSCALL_CONSOLEOUT  equ 0x30
 

@@ -47,6 +47,8 @@ Main:
   out PORT_PIC_SLAVE_DATA, al
 .patch_tcbs:
   mov eax, cr3
+  add eax, PAGE_SIZE ; PageDirectoryBoot -> PageDirectoryUser
+  mov cr3, eax
   mov [TCB.thread1+TCB_CR3], eax
   mov [TCB.thread2+TCB_CR3], eax
   mov [TCB.thread3+TCB_CR3], eax

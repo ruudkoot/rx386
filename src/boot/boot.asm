@@ -64,7 +64,7 @@ Main:
   call ElfLoad
   mov edx, USER_PHYS
   mov ebx, USER_VIRT
-  mov esi, PageTable4+1
+  mov esi, PageTable0User+1
   call ElfLoad
   xor esi, esi
   call FloppyMotorOff
@@ -93,7 +93,7 @@ Main:
   mov esp, BOOT_STACK
 .enable_paging:
   call PageTableSetup
-  mov eax, PageDirectory
+  mov eax, PageDirectoryBoot
   mov cr3, eax
   mov eax, cr0
   or eax, CR0_PG
@@ -1962,28 +1962,28 @@ PageTableSetup:
   xor eax, eax
   mov ecx, 1024
 .page_directory_loop:
-  mov [PageDirectory+4*ecx-4], eax
+  mov [PageDirectoryBoot+4*ecx-4], eax
   loop .page_directory_loop
 .page_directory_fill:
-  mov eax, PageTable0
+  mov eax, PageTable0Boot
   or eax, PAGE_PRESENT | PAGE_RW
-  mov [PageDirectory+0x000], eax
-  mov eax, PageTable4
+  mov [PageDirectoryBoot+0x000], eax
+  mov eax, PageTable0User
   or eax, PAGE_PRESENT | PAGE_RW | PAGE_USER
-  mov [PageDirectory+0x400], eax
+  mov [PageDirectoryUser+0x000], eax
   mov eax, PageTable8
   or eax, PAGE_PRESENT | PAGE_RW
-  mov [PageDirectory+0x800], eax
+  mov [PageDirectoryBoot+0x800], eax
+  mov [PageDirectoryUser+0x800], eax
   mov eax, PageTableC
   or eax, PAGE_PRESENT | PAGE_RW
-  mov [PageDirectory+0xC00], eax
+  mov [PageDirectoryBoot+0xC00], eax
+  mov [PageDirectoryUser+0xC00], eax
 .page_table:
   mov eax, 0x003ff000 | PAGE_PRESENT | PAGE_RW
   mov ecx, 1024
 .page_table_loop:
-  mov [PageTable0+4*ecx-4], eax
-  ;mov [PageTable4+4*ecx-4], eax
-  ;mov [PageTable8+4*ecx-4], eax
+  mov [PageTable0Boot+4*ecx-4], eax
   mov [PageTableC+4*ecx-4], eax
   sub eax, 0x00001000
   loop .page_table_loop
@@ -2162,11 +2162,12 @@ section .bss
   FileCurrentSector                 resw 1
 
 align 4096, resb 1
-  PageDirectory resd 1024
-  PageTable0    resd 1024
-  PageTable4    resd 1024
-  PageTable8    resd 1024
-  PageTableC    resd 1024
+  PageDirectoryBoot                 resd 1024
+  PageDirectoryUser                 resd 1024
+  PageTable0Boot                    resd 1024
+  PageTable0User                    resd 1024
+  PageTable8                        resd 1024
+  PageTableC                        resd 1024
 
 ;-------------------------------------------------------------------------------
 ; ABSOLUTE

@@ -18,13 +18,13 @@ dist/disk.img: dist/bootsect.bin dist/boot.sys dist/kernel.elf dist/user.elf
 dist/bootsect.bin: src/boot/bootsect.asm
 	nasm src/boot/bootsect.asm -f bin -i src/include/ -o dist/bootsect.bin
 
-dist/boot.sys: src/boot/boot.asm src/include/config.inc src/include/defs.inc src/include/elf.inc
+dist/boot.sys: src/boot/boot.asm src/include/config.inc src/include/defs.inc src/include/elf.inc src/include/kernel.inc
 	nasm src/boot/boot.asm -f bin -i src/include/ -o dist/boot.sys
 
-dist/kernel.elf: src/kernel/kernel.asm src/include/config.inc src/include/defs.inc
+dist/kernel.elf: src/kernel/kernel.asm src/include/config.inc src/include/defs.inc src/include/kernel.inc
 	nasm src/kernel/kernel.asm -f elf -i src/include/ -o dist/kernel.elf
 	strip --strip-unneeded dist/kernel.elf
 
-dist/user.elf: src/user/user.asm  src/include/config.inc src/include/defs.inc
+dist/user.elf: src/user/user.asm  src/include/config.inc src/include/defs.inc src/include/kernel.inc
 	nasm src/user/user.asm -f elf -i src/include/ -o dist/user.elf
 	strip --strip-unneeded dist/user.elf
