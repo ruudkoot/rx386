@@ -30,7 +30,9 @@ Main:
   mov es, ax
   mov ss, ax
   xor sp, sp
+  call NmiMask
   call InterruptSetup
+  call NmiUnmask
   sti
 .print_signature:
   call VideoSetup
@@ -206,10 +208,10 @@ DiskRead:
   ; call PrintFormatted
   ; add sp, 8
   mov ax, 0x0201
-  mov dl, [BpbPhysicalUnit]
+  mov dl, [BOOT_SECTOR+BPB_PHYSICALUNIT]
   int 0x13
   jc .disk_error
-  add bx, [BpbBytesPerSector]
+  add bx, [BOOT_SECTOR+BPB_BYTESPERSECTOR]
   inc si
   dec di
   jmp .loop_start
@@ -261,13 +263,13 @@ FloppyMotorOff:
 ;
 DiskInit:
   push ax
-  mov ax, [BpbPhysicalUnit]
+  mov ax, [BOOT_SECTOR+BPB_PHYSICALUNIT]
   mov [DiskBiosDriveNumber], ax
-  mov ax, [BpbNumberOfHeads]
+  mov ax, [BOOT_SECTOR+BPB_NUMBEROFHEADS]
   mov [DiskNumberOfHeads], ax
-  mov ax, [BpbSectorsPerTrack]
+  mov ax, [BOOT_SECTOR+BPB_SECTORSPERTRACK]
   mov [DiskSectorsPerTrack], ax
-  mov ax, [BpbBytesPerSector]
+  mov ax, [BOOT_SECTOR+BPB_BYTESPERSECTOR]
   mov [DiskBytesPerSector], ax
   pop ax
   ret
@@ -337,18 +339,18 @@ FatInit:
   push cx
   push dx
   push bx
-  mov bl, [BpbSectorsPerCluster]
+  mov bl, [BOOT_SECTOR+BPB_SECTORSPERCLUSTER]
   xor bh, bh
   mov [FatSectorsPerCluster], bx
-  mov bx, [BpbReservedSectors]
+  mov bx, [BOOT_SECTOR+BPB_RESERVEDSECTORS]
   mov [FatFirstFileAllocationTableSector], bx
-  mov al, [BpbNumberOfFATs]
+  mov al, [BOOT_SECTOR+BPB_NUMBEROFFATS]
   xor ah, ah
-  mov cx, [BpbSectorsPerFAT]
+  mov cx, [BOOT_SECTOR+BPB_SECTORSPERFAT]
   mul cx
   add bx, ax
   mov [FatFirstRootDirectorySector], bx
-  mov ax, [BpbRootDirectoryEntries]
+  mov ax, [BOOT_SECTOR+BPB_ROOTDIRECTORYENTRIES]
   mov cl, 5
   shl ax, cl
   mov cx, [DiskBytesPerSector]
@@ -744,7 +746,7 @@ FileRead:
   mov ax, [si+DIRECTORY_ENTRY_SIZE]
   push ax
   xor dx, dx
-  mov bx, [BpbBytesPerSector]
+  mov bx, [BOOT_SECTOR+BPB_BYTESPERSECTOR]
   div bx
   or dx, dx
   jz .no_slack
@@ -1251,55 +1253,54 @@ section .text
 
 InterruptSetup:
   push ax
-  mov word [Int00Off], Interrupt00
-  mov [Int00Seg], ax
-  mov word [Int01Off], Interrupt01
-  mov [Int01Seg], ax
-  ; FIXME: mask NMI
-  mov word [Int02Off], Interrupt02
-  mov [Int02Seg], ax
-  mov word [Int03Off], Interrupt03
-  mov [Int03Seg], ax
-  mov word [Int04Off], Interrupt04
-  mov [Int04Seg], ax
-  ; mov word [Int05Off], Interrupt05
-  ; mov [Int05Seg], ax
-  mov word [Int06Off], Interrupt06
-  mov [Int06Seg], ax
-  mov word [Int07Off], Interrupt07
-  mov [Int07Seg], ax
-  mov [Int20Seg], ax
-  mov word [Int20Off], Interrupt20
-  mov [Int21Seg], ax
-  mov word [Int21Off], Interrupt21
-  mov [Int22Seg], ax
-  mov word [Int22Off], InterruptReturn
-  mov [Int23Seg], ax
-  mov word [Int23Off], InterruptReturn
-  mov [Int24Seg], ax
-  mov word [Int24Off], InterruptReturn
-  mov [Int25Seg], ax
-  mov word [Int25Off], InterruptReturn
-  mov [Int26Seg], ax
-  mov word [Int26Off], InterruptReturn
-  mov [Int27Seg], ax
-  mov word [Int27Off], InterruptReturn
-  mov [Int28Seg], ax
-  mov word [Int28Off], InterruptReturn
-  mov [Int29Seg], ax
-  mov word [Int29Off], InterruptReturn
-  mov [Int2ASeg], ax
-  mov word [Int2AOff], InterruptReturn
-  mov [Int2BSeg], ax
-  mov word [Int2BOff], InterruptReturn
-  mov [Int2CSeg], ax
-  mov word [Int2COff], InterruptReturn
-  mov [Int2DSeg], ax
-  mov word [Int2DOff], InterruptReturn
-  mov [Int2ESeg], ax
-  mov word [Int2EOff], InterruptReturn
-  mov [Int2FSeg], ax
-  mov word [Int2FOff], InterruptReturn
+  mov word [IV_OFFSET(0x00)], Interrupt00
+  mov [IV_SEGMENT(0x00)], ax
+  mov word [IV_OFFSET(0x01)], Interrupt01
+  mov [IV_SEGMENT(0x01)], ax
+  mov word [IV_OFFSET(0x02)], Interrupt02
+  mov [IV_SEGMENT(0x02)], ax
+  mov word [IV_OFFSET(0x03)], Interrupt03
+  mov [IV_SEGMENT(0x03)], ax
+  mov word [IV_OFFSET(0x04)], Interrupt04
+  mov [IV_SEGMENT(0x04)], ax
+  ; mov word [IV_OFFSET(0x05)], Interrupt05
+  ; mov [IV_SEGMENT(0x05)], ax
+  mov word [IV_OFFSET(0x06)], Interrupt06
+  mov [IV_SEGMENT(0x06)], ax
+  mov word [IV_OFFSET(0x07)], Interrupt07
+  mov [IV_SEGMENT(0x07)], ax
+  mov word [IV_OFFSET(0x20)], Interrupt20
+  mov [IV_SEGMENT(0x20)], ax
+  mov word [IV_OFFSET(0x21)], Interrupt21
+  mov [IV_SEGMENT(0x21)], ax
+  mov word [IV_OFFSET(0x22)], InterruptReturn
+  mov [IV_SEGMENT(0x22)], ax
+  mov word [IV_OFFSET(0x23)], InterruptReturn
+  mov [IV_SEGMENT(0x23)], ax
+  mov word [IV_OFFSET(0x24)], InterruptReturn
+  mov [IV_SEGMENT(0x24)], ax
+  mov word [IV_OFFSET(0x25)], InterruptReturn
+  mov [IV_SEGMENT(0x25)], ax
+  mov word [IV_OFFSET(0x26)], InterruptReturn
+  mov [IV_SEGMENT(0x26)], ax
+  mov word [IV_OFFSET(0x27)], InterruptReturn
+  mov [IV_SEGMENT(0x27)], ax
+  mov word [IV_OFFSET(0x28)], InterruptReturn
+  mov [IV_SEGMENT(0x28)], ax
+  mov word [IV_OFFSET(0x29)], InterruptReturn
+  mov [IV_SEGMENT(0x29)], ax
+  mov word [IV_OFFSET(0x2A)], InterruptReturn
+  mov [IV_SEGMENT(0x2A)], ax
+  mov word [IV_OFFSET(0x2B)], InterruptReturn
+  mov [IV_SEGMENT(0x2B)], ax
+  mov word [IV_OFFSET(0x2C)], InterruptReturn
+  mov [IV_SEGMENT(0x2C)], ax
+  mov word [IV_OFFSET(0x2D)], InterruptReturn
+  mov [IV_SEGMENT(0x2D)], ax
+  mov word [IV_OFFSET(0x2E)], InterruptReturn
+  mov [IV_SEGMENT(0x2E)], ax
+  mov word [IV_OFFSET(0x2F)], InterruptReturn
+  mov [IV_SEGMENT(0x2F)], ax
   pop ax
   ret
 
@@ -2171,128 +2172,6 @@ align 4096, resb 1
 ; ABSOLUTE
 ;-------------------------------------------------------------------------------
 
-absolute 0x0000
-  Int00Off resw 1
-  Int00Seg resw 1
-  Int01Off resw 1
-  Int01Seg resw 1
-  Int02Off resw 1
-  Int02Seg resw 1
-  Int03Off resw 1
-  Int03Seg resw 1
-  Int04Off resw 1
-  Int04Seg resw 1
-  Int05Off resw 1
-  Int05Seg resw 1
-  Int06Off resw 1
-  Int06Seg resw 1
-  Int07Off resw 1
-  Int07Seg resw 1
-  Int08Off resw 1
-  Int08Seg resw 1
-  Int09Off resw 1
-  Int09Seg resw 1
-  Int0AOff resw 1
-  Int0ASeg resw 1
-  Int0BOff resw 1
-  Int0BSeg resw 1
-  Int0COff resw 1
-  Int0CSeg resw 1
-  Int0DOff resw 1
-  Int0DSeg resw 1
-  Int0EOff resw 1
-  Int0ESeg resw 1
-  Int0FOff resw 1
-  Int0FSeg resw 1
-  Int10Off resw 1
-  Int10Seg resw 1
-  Int11Off resw 1
-  Int11Seg resw 1
-  Int12Off resw 1
-  Int12Seg resw 1
-  Int13Off resw 1
-  Int13Seg resw 1
-  Int14Off resw 1
-  Int14Seg resw 1
-  Int15Off resw 1
-  Int15Seg resw 1
-  Int16Off resw 1
-  Int16Seg resw 1
-  Int17Off resw 1
-  Int17Seg resw 1
-  Int18Off resw 1
-  Int18Seg resw 1
-  Int19Off resw 1
-  Int19Seg resw 1
-  Int1AOff resw 1
-  Int1ASeg resw 1
-  Int1BOff resw 1
-  Int1BSeg resw 1
-  Int1COff resw 1
-  Int1CSeg resw 1
-  Int1DOff resw 1
-  Int1DSeg resw 1
-  Int1EOff resw 1
-  Int1ESeg resw 1
-  Int1FOff resw 1
-  Int1FSeg resw 1
-  Int20Off resw 1
-  Int20Seg resw 1
-  Int21Off resw 1
-  Int21Seg resw 1
-  Int22Off resw 1
-  Int22Seg resw 1
-  Int23Off resw 1
-  Int23Seg resw 1
-  Int24Off resw 1
-  Int24Seg resw 1
-  Int25Off resw 1
-  Int25Seg resw 1
-  Int26Off resw 1
-  Int26Seg resw 1
-  Int27Off resw 1
-  Int27Seg resw 1
-  Int28Off resw 1
-  Int28Seg resw 1
-  Int29Off resw 1
-  Int29Seg resw 1
-  Int2AOff resw 1
-  Int2ASeg resw 1
-  Int2BOff resw 1
-  Int2BSeg resw 1
-  Int2COff resw 1
-  Int2CSeg resw 1
-  Int2DOff resw 1
-  Int2DSeg resw 1
-  Int2EOff resw 1
-  Int2ESeg resw 1
-  Int2FOff resw 1
-  Int2FSeg resw 1
-
 absolute 0x7000
   SectorBufferFAT           resb 512
   SectorBufferDirectory     resb 512
-
-absolute 0x7c00
-  BpbJump                   resb 3
-  BpbSystemName             resb 8
-  BpbBytesPerSector         resw 1
-  BpbSectorsPerCluster      resb 1
-  BpbReservedSectors        resw 1
-  BpbNumberOfFATs           resb 1
-  BpbRootDirectoryEntries   resw 1
-  BpbTotalNumberOfSectors   resw 1
-  BpbMediaDescriptor        resb 1
-  BpbSectorsPerFAT          resw 1
-  BpbSectorsPerTrack        resw 1
-  BpbNumberOfHeads          resw 1
-  BpbHiddenSectors          resd 1
-  BpbTotalNumberOfSectors2  resd 1
-  BpbPhysicalUnit           resb 1
-  BpbReserved               resb 1
-  BpbMagicNumber            resb 1
-  BpbVolumeSerialNumber     resd 1
-  BpbVolumeLabel            resb 11
-  BpbFileSystem             resb 8
-  BpbBootCode               resb 448
-  BpbSignature              resw 1

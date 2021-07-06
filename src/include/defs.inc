@@ -303,6 +303,13 @@ CRTC_LIGHT_PEN_HIGH         equ 16
 CRTC_LIGHT_PEN_LOW          equ 17
 
 ;-------------------------------------------------------------------------------
+; INTERRUPT VECTOR TABLE
+;-------------------------------------------------------------------------------
+
+%define IV_OFFSET(x) (4*x)
+%define IV_SEGMENT(x) (4*x+2)
+
+;-------------------------------------------------------------------------------
 ; BIOS DATA AREA
 ;-------------------------------------------------------------------------------
 
@@ -362,6 +369,35 @@ LOADALL_GDTR                equ 0x0084E
 LOADALL_LDT_DESCRIPTOR      equ 0x00854
 LOADALL_IDTR                equ 0x0085A
 LOADALL_TSS_DESCRIPTOR      equ 0x00860
+
+;-------------------------------------------------------------------------------
+; BIOS PARAMTER BLOCK
+;-------------------------------------------------------------------------------
+
+BOOT_SECTOR                 equ 0x07C00
+
+BPB_JUMP                    equ 0x000
+BPB_SYSTEMNAME              equ 0x003
+BPB_BYTESPERSECTOR          equ 0x00B
+BPB_SECTORSPERCLUSTER       equ 0x00D
+BPB_RESERVEDSECTORS         equ 0x00E
+BPB_NUMBEROFFATS            equ 0x010
+BPB_ROOTDIRECTORYENTRIES    equ 0x011
+BPB_TOTALNUMBEROFSECTORS    equ 0x013
+BPB_MEDIADESCRIPTOR         equ 0x015
+BPB_SECTORSPERFAT           equ 0x016
+BPB_SECTORSPERTRACK         equ 0x018
+BPB_NUMBEROFHEADS           equ 0x01A
+BPB_HIDDENSECTORS           equ 0x01C
+BPB_TOTALNUMBEROFSECTORS2   equ 0x020
+BPB_PHYSICALUNIT            equ 0x024
+BPB_RESERVED                equ 0x025
+BPB_MAGICNUMBER             equ 0x026
+BPB_VOLUMESERIALNUMBER      equ 0x027
+BPB_VOLUMELABEL             equ 0x02B
+BPB_FILESYSTEM              equ 0x036
+BPB_BOOTCODE                equ 0x03E
+BPB_SIGNATURE               equ 0x1FE
 
 ;-------------------------------------------------------------------------------
 ; BIOS
