@@ -13,6 +13,7 @@ USER_STACK          equ 0x00000000 ; FIXME
 
 SYSCALL_CONSOLEOUT  equ 0x30
 SYSCALL_SETTCB      equ 0x31
+SYSCALL_SETIOPB     equ 0x32
 
 TCB_NEXT            equ 0
 TCB_CR3             equ 4

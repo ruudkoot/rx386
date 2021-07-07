@@ -208,7 +208,17 @@ TSS:
   dw 0                ; LDTR
   dw 0                ; reserved
   dw 0                ; reserved / trap
-  dw 0                ; IOPB offset
+  dw .iopb - .start   ; IOPB offset
+.iopb:
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+  db 0xFF
 .end:
 
 section .bss
@@ -1136,6 +1146,17 @@ SysCall_SetTCB:
   popa
   iret
 
+; Syscall
+align 4
+SysCall_SetIOPB:
+  cli
+  pusha
+.body:
+  mov [TSS.iopb+4*eax], edx
+.epilogue:
+  popa
+  iret
+
 ;
 ; IdtShuffle - Reorder bytes in IDT
 ;
@@ -1324,6 +1345,9 @@ IDT:
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .syscall_settcb:
   dd SysCall_SetTCB
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_setiopb:
+  dd SysCall_SetIOPB
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .end:
 

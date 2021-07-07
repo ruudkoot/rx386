@@ -36,6 +36,10 @@ Main:
   mov ecx, ThreadD
   mov ebx, StackD.top
   int SYSCALL_SETTCB
+  mov eax, 4
+  mov edx, 0xFFFFFFF0
+  int SYSCALL_SETIOPB
+  in eax, 0x80
   jmp ThreadA
 
 align 256
