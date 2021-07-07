@@ -9,9 +9,10 @@ KERNEL_ENTRY        equ 0x80001000
 USER_PHYS           equ 0x00020000
 USER_VIRT           equ 0x00000000
 USER_ENTRY          equ 0x00001000
-USER_STACK          equ 0x00003000
+USER_STACK          equ 0x00000000 ; FIXME
 
 SYSCALL_CONSOLEOUT  equ 0x30
+SYSCALL_SETTCB      equ 0x31
 
 TCB_NEXT            equ 0
 TCB_CR3             equ 4

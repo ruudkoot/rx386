@@ -245,6 +245,23 @@ PIC_CMD_NSEOI_ROTATE        equ 0xa0
 PIC_CMD_PRIORITY            equ 0xc0
 PIC_CMD_SEOI_ROTATE         equ 0xe0
 
+IRQ0                        equ 0x01
+IRQ1                        equ 0x02
+IRQ2                        equ 0x04
+IRQ3                        equ 0x08
+IRQ4                        equ 0x10
+IRQ5                        equ 0x20
+IRQ6                        equ 0x40
+IRQ7                        equ 0x80
+IRQ8                        equ 0x01
+IRQ9                        equ 0x02
+IRQ10                       equ 0x04
+IRQ11                       equ 0x08
+IRQ12                       equ 0x10
+IRQ13                       equ 0x20
+IRQ14                       equ 0x40
+IRQ15                       equ 0x80
+
 ;-------------------------------------------------------------------------------
 ; PROGRAMMABLE INTERVAL TIMER (828253/8254)
 ;-------------------------------------------------------------------------------

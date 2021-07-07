@@ -16,6 +16,7 @@ section .bss    nobits    alloc   noexec  write     align=4096
 section .text
 
 USER_START:
+  mov esp, StackA.top
   jmp Main
 
           db 0
@@ -23,7 +24,19 @@ Signature db CR,LF,'RX/386 USER SERVICES ',__UTC_DATE__,' ',__UTC_TIME__,CR,LF
 Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',CR,LF,0
 
 Main:
-  jmp Main
+  mov eax, 1
+  mov ecx, ThreadB
+  mov ebx, StackB.top
+  int SYSCALL_SETTCB
+  mov eax, 2
+  mov ecx, ThreadC
+  mov ebx, StackC.top
+  int SYSCALL_SETTCB
+  mov eax, 3
+  mov ecx, ThreadD
+  mov ebx, StackD.top
+  int SYSCALL_SETTCB
+  jmp ThreadA
 
 align 256
 ThreadA:
@@ -51,8 +64,24 @@ ThreadD:
 
 section .data
 
-DummyData db 'DUMMY',0
+db 'DATA',0
 
 section .bss
 
-Stack resd 1024
+align 4
+StackA:
+.bottom:
+  resd 1024
+.top:
+StackB:
+.bottom:
+  resd 1024
+.top:
+StackC:
+.bottom:
+  resd 1024
+.top:
+StackD:
+.bottom:
+  resd 1024
+.top:

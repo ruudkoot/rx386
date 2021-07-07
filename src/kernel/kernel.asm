@@ -36,128 +36,130 @@ Main:
   call IdtShuffle
   lgdt [GDTR]
   lidt [IDTR]
+  mov eax, SELECTOR_TSS | 3
+  ltr ax
   jmp SELECTOR_CODE0:.body
 .body:
   mov esi, Signature
   call PrintString
-.enable_irqs:
-  mov al, 0xfc
-  out PORT_PIC_MASTER_DATA, al
-  mov al, 0xff
-  out PORT_PIC_SLAVE_DATA, al
 .patch_tcbs:
   mov eax, cr3
   add eax, PAGE_SIZE ; PageDirectoryBoot -> PageDirectoryUser
   mov cr3, eax
+  mov [TCB.thread0+TCB_CR3], eax
   mov [TCB.thread1+TCB_CR3], eax
   mov [TCB.thread2+TCB_CR3], eax
   mov [TCB.thread3+TCB_CR3], eax
-  mov [TCB.thread4+TCB_CR3], eax
+.enable_irqs:
+  mov al, IRQ7 | IRQ6 | IRQ5 | IRQ4 | IRQ3 | IRQ2
+  out PORT_PIC_MASTER_DATA, al
+  mov al, IRQ15 | IRQ14 | IRQ13 | IRQ12 | IRQ11 | IRQ10 | IRQ9 | IRQ8
+  out PORT_PIC_SLAVE_DATA, al
 .enter_ring3:
-  mov eax, SELECTOR_TSS | 3
-  ltr ax
   mov eax, SELECTOR_DATA3 | 3
   mov ds, ax
   mov es, ax
   mov fs, ax
   mov gs, ax
   push SELECTOR_DATA3 | 3
-  push USER_STACK+1*1024
-  pushf
-  pop eax
-  or eax, EFLAGS_IF
-  push eax
+  push USER_STACK
+  push EFLAGS_IF
   push SELECTOR_CODE3 | 3
-  push USER_ENTRY+0x0100
+  push USER_ENTRY
   iret
+
+BusyLoop:
+  jmp BusyLoop
 
 ;-------------------------------------------------------------------------------
 ; THREAD CONTROL BLOCKS
 ;-------------------------------------------------------------------------------
 
+TCB_SIZE equ TCB.thread1 - TCB.thread0
+
 section .data
 
-CurrentThread dd TCB.thread1
+CurrentThread dd TCB.thread0
 
 align 4
 TCB:
 .start:
+.thread0:
+  dd .thread1           ; NEXT
+  dd 0x00000000         ; CR3
+  dd USER_ENTRY         ; EIP
+  dd EFLAGS_IF          ; EFLAGS
+  dd 0x00000000         ; EAX
+  dd 0x00000000         ; ECX
+  dd 0x00000000         ; EDX
+  dd 0x00000000         ; EBX
+  dd 0x00000000         ; ESP
+  dd 0x00000000         ; EBP
+  dd 0x00000000         ; ESI
+  dd 0x00000000         ; EDI
+  dd SELECTOR_CODE3 | 3 ; CS
+  dd SELECTOR_DATA3 | 3 ; DS
+  dd SELECTOR_DATA3 | 3 ; ES
+  dd SELECTOR_DATA3 | 3 ; FS
+  dd SELECTOR_DATA3 | 3 ; GS
+  dd SELECTOR_DATA3 | 3 ; SS
 .thread1:
   dd .thread2           ; NEXT
   dd 0x00000000         ; CR3
-  dd USER_ENTRY+0x0100  ; EIP
+  dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd USER_STACK+1*1024  ; ESP
+  dd BusyLoopStack.top  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
-  dd SELECTOR_CODE3 | 3 ; CS
-  dd SELECTOR_DATA3 | 3 ; DS
-  dd SELECTOR_DATA3 | 3 ; ES
-  dd SELECTOR_DATA3 | 3 ; FS
-  dd SELECTOR_DATA3 | 3 ; GS
-  dd SELECTOR_DATA3 | 3 ; SS
+  dd SELECTOR_CODE0 | 0 ; CS
+  dd SELECTOR_DATA0 | 0 ; DS
+  dd SELECTOR_DATA0 | 0 ; ES
+  dd SELECTOR_DATA0 | 0 ; FS
+  dd SELECTOR_DATA0 | 0 ; GS
+  dd SELECTOR_DATA0 | 0 ; SS
 .thread2:
   dd .thread3           ; NEXT
   dd 0x00000000         ; CR3
-  dd USER_ENTRY+0x0200  ; EIP
+  dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd USER_STACK+2*1024  ; ESP
+  dd BusyLoopStack.top  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
-  dd SELECTOR_CODE3 | 3 ; CS
-  dd SELECTOR_DATA3 | 3 ; DS
-  dd SELECTOR_DATA3 | 3 ; ES
-  dd SELECTOR_DATA3 | 3 ; FS
-  dd SELECTOR_DATA3 | 3 ; GS
-  dd SELECTOR_DATA3 | 3 ; SS
+  dd SELECTOR_CODE0 | 0 ; CS
+  dd SELECTOR_DATA0 | 0 ; DS
+  dd SELECTOR_DATA0 | 0 ; ES
+  dd SELECTOR_DATA0 | 0 ; FS
+  dd SELECTOR_DATA0 | 0 ; GS
+  dd SELECTOR_DATA0 | 0 ; SS
 .thread3:
-  dd .thread4           ; NEXT
+  dd .thread0           ; NEXT
   dd 0x00000000         ; CR3
-  dd USER_ENTRY+0x0300  ; EIP
+  dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
   dd 0x00000000         ; EAX
   dd 0x00000000         ; ECX
   dd 0x00000000         ; EDX
   dd 0x00000000         ; EBX
-  dd USER_STACK+3*1024  ; ESP
+  dd BusyLoopStack.top  ; ESP
   dd 0x00000000         ; EBP
   dd 0x00000000         ; ESI
   dd 0x00000000         ; EDI
-  dd SELECTOR_CODE3 | 3 ; CS
-  dd SELECTOR_DATA3 | 3 ; DS
-  dd SELECTOR_DATA3 | 3 ; ES
-  dd SELECTOR_DATA3 | 3 ; FS
-  dd SELECTOR_DATA3 | 3 ; GS
-  dd SELECTOR_DATA3 | 3 ; SS
-.thread4:
-  dd .thread1           ; NEXT
-  dd 0x00000000         ; CR3
-  dd USER_ENTRY+0x0400  ; EIP
-  dd EFLAGS_IF          ; EFLAGS
-  dd 0x00000000         ; EAX
-  dd 0x00000000         ; ECX
-  dd 0x00000000         ; EDX
-  dd 0x00000000         ; EBX
-  dd USER_STACK+4*1024  ; ESP
-  dd 0x00000000         ; EBP
-  dd 0x00000000         ; ESI
-  dd 0x00000000         ; EDI
-  dd SELECTOR_CODE3 | 3 ; CS
-  dd SELECTOR_DATA3 | 3 ; DS
-  dd SELECTOR_DATA3 | 3 ; ES
-  dd SELECTOR_DATA3 | 3 ; FS
-  dd SELECTOR_DATA3 | 3 ; GS
-  dd SELECTOR_DATA3 | 3 ; SS
+  dd SELECTOR_CODE0 | 0 ; CS
+  dd SELECTOR_DATA0 | 0 ; DS
+  dd SELECTOR_DATA0 | 0 ; ES
+  dd SELECTOR_DATA0 | 0 ; FS
+  dd SELECTOR_DATA0 | 0 ; GS
+  dd SELECTOR_DATA0 | 0 ; SS
 .end:
 
 ;-------------------------------------------------------------------------------
@@ -213,6 +215,10 @@ section .bss
 
 align 4
 KernelStack:
+.bottom:
+  resd 1024
+.top:
+BusyLoopStack:
 .bottom:
   resd 1024
 .top:
@@ -747,7 +753,7 @@ Exception1F:
   iret
 
 ;
-; IRQ0 - Programmable Interval Timer
+; IRQ0_Handler - Programmable Interval Timer
 ;
 ; Performs context switching.
 ;
@@ -769,7 +775,7 @@ Exception1F:
 ; - Handle segments more efficiently
 ;
 align 4
-IRQ0:
+IRQ0_Handler:
   cli
   push ds ; FIXME: partial write
   push es ; FIXME: partial write
@@ -867,7 +873,7 @@ IRQ0:
 
 ; Interrupt
 align 4
-IRQ1:
+IRQ1_Handler:
   cli
   pusha
 .body:
@@ -882,7 +888,7 @@ IRQ1:
 
 ; Interrupt
 align 4
-IRQ2:
+IRQ2_Handler:
   cli
   pusha
 .body:
@@ -897,7 +903,7 @@ IRQ2:
 
 ; Interrupt
 align 4
-IRQ3:
+IRQ3_Handler:
   cli
   pusha
 .body:
@@ -912,7 +918,7 @@ IRQ3:
 
 ; Interrupt
 align 4
-IRQ4:
+IRQ4_Handler:
   cli
   pusha
 .body:
@@ -927,7 +933,7 @@ IRQ4:
 
 ; Interrupt
 align 4
-IRQ5:
+IRQ5_Handler:
   cli
   pusha
 .body:
@@ -942,7 +948,7 @@ IRQ5:
 
 ; Interrupt
 align 4
-IRQ6:
+IRQ6_Handler:
   cli
   pusha
 .body:
@@ -957,7 +963,7 @@ IRQ6:
 
 ; Interrupt
 align 4
-IRQ7:
+IRQ7_Handler:
   cli
   pusha
 .body:
@@ -972,7 +978,7 @@ IRQ7:
 
 ; Interrupt
 align 4
-IRQ8:
+IRQ8_Handler:
   cli
   pusha
 .body:
@@ -988,7 +994,7 @@ IRQ8:
 
 ; Interrupt
 align 4
-IRQ9:
+IRQ9_Handler:
   cli
   pusha
 .body:
@@ -1004,7 +1010,7 @@ IRQ9:
 
 ; Interrupt
 align 4
-IRQ10:
+IRQ10_Handler:
   cli
   pusha
 .body:
@@ -1020,7 +1026,7 @@ IRQ10:
 
 ; Interrupt
 align 4
-IRQ11:
+IRQ11_Handler:
   cli
   pusha
 .body:
@@ -1036,7 +1042,7 @@ IRQ11:
 
 ; Interrupt
 align 4
-IRQ12:
+IRQ12_Handler:
   cli
   pusha
 .body:
@@ -1052,7 +1058,7 @@ IRQ12:
 
 ; Interrupt
 align 4
-IRQ13:
+IRQ13_Handler:
   cli
   pusha
 .body:
@@ -1068,7 +1074,7 @@ IRQ13:
 
 ; Interrupt
 align 4
-IRQ14:
+IRQ14_Handler:
   cli
   pusha
 .body:
@@ -1084,7 +1090,7 @@ IRQ14:
 
 ; Interrupt
 align 4
-IRQ15:
+IRQ15_Handler:
   cli
   pusha
 .body:
@@ -1105,6 +1111,27 @@ SysCall_ConsoleOut:
   pusha
 .body:
   call ConsoleOut
+.epilogue:
+  popa
+  iret
+
+; Syscall
+align 4
+SysCall_SetTCB:
+  cli
+  pusha
+.body:
+  mov edx, TCB_SIZE
+  mul edx
+  add eax, TCB
+  mov [eax+TCB_EIP], ecx
+  mov [eax+TCB_ESP], ebx
+  mov dword [eax+TCB_CS], SELECTOR_CODE3 | 3
+  mov dword [eax+TCB_DS], SELECTOR_DATA3 | 3
+  mov dword [eax+TCB_ES], SELECTOR_DATA3 | 3
+  mov dword [eax+TCB_FS], SELECTOR_DATA3 | 3
+  mov dword [eax+TCB_GS], SELECTOR_DATA3 | 3
+  mov dword [eax+TCB_SS], SELECTOR_DATA3 | 3
 .epilogue:
   popa
   iret
@@ -1245,55 +1272,58 @@ IDT:
   dd Exception1F
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq0:
-  dd IRQ0
+  dd IRQ0_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq1:
-  dd IRQ1
+  dd IRQ1_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq2:
-  dd IRQ2
+  dd IRQ2_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq3:
-  dd IRQ3
+  dd IRQ3_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq4:
-  dd IRQ4
+  dd IRQ4_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq5:
-  dd IRQ5
+  dd IRQ5_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq6:
-  dd IRQ6
+  dd IRQ6_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq7:
-  dd IRQ7
+  dd IRQ7_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq8:
-  dd IRQ8
+  dd IRQ8_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq9:
-  dd IRQ9
+  dd IRQ9_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq10:
-  dd IRQ10
+  dd IRQ10_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq11:
-  dd IRQ11
+  dd IRQ11_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq12:
-  dd IRQ12
+  dd IRQ12_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq13:
-  dd IRQ13
+  dd IRQ13_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq14:
-  dd IRQ14
+  dd IRQ14_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .irq15:
-  dd IRQ15
+  dd IRQ15_Handler
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
 .syscall_console_out:
   dd SysCall_ConsoleOut
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_settcb:
+  dd SysCall_SetTCB
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .end:
 
@@ -1448,7 +1478,7 @@ Panic:
 section .data
 
 MessagePanic1:
-  db '! EXCEPTION %s    ERROR CODE %h',CR,LF,0
+  db CR,LF,'! EXCEPTION %s    ERROR CODE %h',CR,LF,0
 
 section .text
 
