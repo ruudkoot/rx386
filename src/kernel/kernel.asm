@@ -77,6 +77,9 @@ BusyLoop:
 
 TCB_SIZE equ TCB.thread1 - TCB.thread0
 
+THREAD_RUNNING  equ 1
+THREAD_BLOCKED  equ 2
+
 section .data
 
 CurrentThread dd TCB.thread0
@@ -103,6 +106,7 @@ TCB:
   dd SELECTOR_DATA3 | 3 ; FS
   dd SELECTOR_DATA3 | 3 ; GS
   dd SELECTOR_DATA3 | 3 ; SS
+  dd THREAD_RUNNING     ; STATE
 .thread1:
   dd .thread2           ; NEXT
   dd 0x00000000         ; CR3
@@ -122,6 +126,7 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; FS
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
+  dd THREAD_BLOCKED     ; STATE
 .thread2:
   dd .thread3           ; NEXT
   dd 0x00000000         ; CR3
@@ -141,6 +146,7 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; FS
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
+  dd THREAD_BLOCKED     ; STATE
 .thread3:
   dd .thread0           ; NEXT
   dd 0x00000000         ; CR3
@@ -160,6 +166,7 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; FS
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
+  dd THREAD_BLOCKED     ; STATE
 .end:
 
 ;-------------------------------------------------------------------------------
@@ -218,8 +225,10 @@ TSS:
   dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
   dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
   dd 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
+.iopb_padding:
   db 0xFF
 .end:
+  db 0xFF, 0xFF, 0xFF
 
 section .bss
 
@@ -336,122 +345,385 @@ GDTR:
 
 section .text
 
+;
+; IdtShuffle - Reorder bytes in IDT
+;
+;   7643 3210 --> 3276 4310
+;
+align 4
+IdtShuffle:
+  pusha
+  mov esi, IDT.start
+  mov edi, IDT.end
+  jmp .loop_check
+.loop_start:
+  mov ebx, [esi]
+  mov ecx, [esi+4]
+  mov eax, ebx
+  and eax, 0x0000ffff
+  mov edx, ecx
+  shl edx, 16
+  or eax, edx
+  mov [esi], eax
+  mov eax, ebx
+  and eax, 0xffff0000
+  mov edx, ecx
+  shr edx, 16
+  or eax, edx
+  mov [esi+4], eax
+  add esi, 8
+.loop_check:
+  cmp esi, edi
+  jl .loop_start
+.epilogue:
+  popa
+  ret
+
+section .data
+
+align 8
+IDT:
+.start:
+.exception_de:
+  dd ExceptionDE
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_db:
+  dd ExceptionDB
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.interrupt_nmi:
+  dd InterruptNMI
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_bp:
+  dd ExceptionBP
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_of:
+  dd ExceptionOF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_br:
+  dd ExceptionBR
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_ud:
+  dd ExceptionUD
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_nm:
+  dd ExceptionNM
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_df:
+  dd ExceptionDF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_cso:
+  dd ExceptionCSO
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_ts:
+  dd ExceptionTS
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_np:
+  dd ExceptionNP
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_ss:
+  dd ExceptionSS
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_gp:
+  dd ExceptionGP
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_pf:
+  dd ExceptionPF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_0f:
+  dd Exception0F
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_mf:
+  dd ExceptionMF
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_ac:
+  dd ExceptionAC
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_mc:
+  dd ExceptionMC
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_xm:
+  dd ExceptionXM
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_ve:
+  dd ExceptionVE
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_15:
+  dd Exception15
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_16:
+  dd Exception16
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_17:
+  dd Exception17
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_18:
+  dd Exception18
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_19:
+  dd Exception19
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_1a:
+  dd Exception1A
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_1b:
+  dd Exception1B
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_1c:
+  dd Exception1C
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_1d:
+  dd Exception1D
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_sx:
+  dd ExceptionSX
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.exception_1f:
+  dd Exception1F
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq0:
+  dd IRQ0_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq1:
+  dd IRQ1_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq2:
+  dd IRQ2_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq3:
+  dd IRQ3_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq4:
+  dd IRQ4_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq5:
+  dd IRQ5_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq6:
+  dd IRQ6_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq7:
+  dd IRQ7_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq8:
+  dd IRQ8_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq9:
+  dd IRQ9_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq10:
+  dd IRQ10_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq11:
+  dd IRQ11_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq12:
+  dd IRQ12_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq13:
+  dd IRQ13_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq14:
+  dd IRQ14_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.irq15:
+  dd IRQ15_Handler
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
+.syscall_console_out:
+  dd SysCall_ConsoleOut
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_settcb:
+  dd SysCall_SetTCB
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_setiopb:
+  dd SysCall_SetIOPB
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_waitirq:
+  dd SysCall_WaitIRQ
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.end:
+
+IDTR:
+.limit:
+  dw (IDT.end - IDT.start - 1)
+.base:
+  dd IDT
+
+;-------------------------------------------------------------------------------
+; EXCEPTION HANDLERS
+;-------------------------------------------------------------------------------
+
+NO_ERROR_CODE equ 0xDEADC0DE
+
+section .text
+
 ; Fault
 align 4
 ExceptionDE:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionDE
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault or Trap
 align 4
 ExceptionDB:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionDB
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Interrupt
 align 4
 InterruptNMI:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageInterruptNMI
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Trap
 align 4
 ExceptionBP:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionBP
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Trap
 align 4
 ExceptionOF:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionOF
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault
 align 4
 ExceptionBR:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionBR
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault
 align 4
 ExceptionUD:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionUD
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault
 align 4
 ExceptionNM:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionNM
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Abort with Error Code
 align 4
 ExceptionDF:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionDF
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Fault
@@ -459,333 +731,536 @@ ExceptionDF:
 align 4
 ExceptionCSO:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionCSO
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault with Error Code
 align 4
 ExceptionTS:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionTS
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Fault with Error Code
 align 4
 ExceptionNP:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionNP
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Fault with Error Code
 align 4
 ExceptionSS:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionSS
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Fault with Error Code
 align 4
 ExceptionGP:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
-.body:
   mov ebp, esp
+.body:
   mov esi, MessageExceptionGP
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Fault with Error Code
 align 4
 ExceptionPF:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionPF
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception0F:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException0F
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault
 align 4
 ExceptionMF:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionMF
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault with Error Code
 align 4
 ExceptionAC:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionAC
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Abort
 align 4
 ExceptionMC:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionMC
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault
 align 4
 ExceptionXM:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionXM
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Fault
 align 4
 ExceptionVE:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionVE
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception15:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException15
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception16:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException16
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception17:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException17
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception18:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException18
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception19:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException19
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception1A:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException1A
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception1B:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException1B
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception1C:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException1C
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception1D:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException1D
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
 ; Unknown with Error Code
 align 4
 ExceptionSX:
   cli
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageExceptionSX
-  mov eax, [ebp+32] ; Error Code
   jmp Panic
 .epilogue:
   popa
-  add esp, 4
+  add esp, 20
   iret
 
 ; Reserved
 align 4
 Exception1F:
   cli
+  push NO_ERROR_CODE
+  push ds
+  push es
+  push fs
+  push gs
   pusha
+  mov ebp, esp
 .body:
   mov esi, MessageException1F
-  xor eax, eax
   jmp Panic
 .epilogue:
   popa
+  add esp, 20
   iret
 
-;
-; IRQ0_Handler - Programmable Interval Timer
-;
-; Performs context switching.
-;
-; Calling Stack:
-;
-;   SS3
-;   ESP3
-;   EFLAGS
-;   CS3
-;   EIP
-;
-; To Do:
-;
-; - Floating-point registers
-;
-; Ideas:
-;
-; - Point ESP0 into the TCB to avoid copy from stack to TCB.
-; - Handle segments more efficiently
-;
-align 4
-IRQ0_Handler:
+section .data
+
+MessageExceptionDE:
+  db 'Divide-by-zero Error (#DE)',0
+
+MessageExceptionDB:
+  db 'Debug (#DB)',0
+
+MessageInterruptNMI:
+  db 'Non-maskable interrupt',0
+
+MessageExceptionBP:
+  db 'Breakpoint (#BP)',0
+
+MessageExceptionOF:
+  db 'Overflow (#OF)',0
+
+MessageExceptionBR:
+  db 'Bound Range Exceeded (#BR)',0
+
+MessageExceptionUD:
+  db 'Invalid Opcode (#UD)',0
+
+MessageExceptionNM:
+  db 'Device Not Available (#NM)',0
+
+MessageExceptionDF:
+  db 'Double Fault (#DF)',0
+
+MessageExceptionCSO:
+  db 'Coprocessor Segment Overrun',0
+
+MessageExceptionTS:
+  db 'Invalid TSS (#TS)',0
+
+MessageExceptionNP:
+  db 'Segment Not Present (#NP)',0
+
+MessageExceptionSS:
+  db 'Stack-Segment Fault (#SS)',0
+
+MessageExceptionGP:
+  db 'General Protection Fault (#GP)',0
+
+MessageExceptionPF:
+  db 'Page Fault (#PF)',0
+
+MessageException0F:
+  db 'Unknown Exception (0Fh)',0
+
+MessageExceptionMF:
+  db 'x87 Floating-Point Exception (#MF)',0
+
+MessageExceptionAC:
+  db 'Alignment Check (#AC)',0
+
+MessageExceptionMC:
+  db 'Machine Check (#MC)',0
+
+MessageExceptionXM:
+  db 'SIMD Floating-Point Exception (#XM)',0
+
+MessageExceptionVE:
+  db 'Virtualization Exception (#VE)',0
+
+; FIXME: Control Protection Exception
+MessageException15:
+  db 'Unknown Exception (15h)',0
+
+MessageException16:
+  db 'Unknown Exception (16h)',0
+
+MessageException17:
+  db 'Unknown Exception (17h)',0
+
+MessageException18:
+  db 'Unknown Exception (18h)',0
+
+MessageException19:
+  db 'Unknown Exception (19h)',0
+
+MessageException1A:
+  db 'Unknown Exception (1Ah)',0
+
+MessageException1B:
+  db 'Unknown Exception (1Bh)',0
+
+MessageException1C:
+  db 'Unknown Exception (1Ch)',0
+
+MessageException1D:
+  db 'Unknown Exception (1Dh)',0
+
+MessageExceptionSX:
+  db 'Security Exception (#SE)',0
+
+MessageException1F:
+  db 'Unknown Exception (1Fh)',0
+
+;-------------------------------------------------------------------------------
+; SCHEDULING
+;-------------------------------------------------------------------------------
+
+%macro SCHEDULER_PROLOGUE 0
   cli
   push ds ; FIXME: partial write
   push es ; FIXME: partial write
@@ -798,10 +1273,9 @@ IRQ0_Handler:
   mov fs, ax
   mov gs, ax
   mov ebp, esp
-.body:
-  mov al, 0
-  call DebugIRQ
-.save_state:
+%endmacro
+
+%macro SCHEDULER_SAVESTATE 0
   mov ebx, [CurrentThread]
   mov eax, [ebp+64]
   mov [ebx+TCB_SS], eax
@@ -835,9 +1309,23 @@ IRQ0_Handler:
   mov [ebx+TCB_ESI], eax
   mov eax, [ebp+0]
   mov [ebx+TCB_EDI], eax
-.switch_task:
-  mov ebx, [ebx+TCB_NEXT]
-  mov [CurrentThread], ebx
+%endmacro
+
+%macro SCHEDULER_SELECTTHREAD 1
+  mov [CurrentThread], %1
+  mov dword [%1+TCB_STATE], THREAD_RUNNING
+%endmacro
+
+%macro SCHEDULER_NEXTTHREAD 0
+  %%next_thread:
+    mov ebx, [ebx+TCB_NEXT]
+    mov eax, [ebx+TCB_STATE]
+    cmp eax, THREAD_RUNNING
+    jne %%next_thread
+    mov [CurrentThread], ebx
+%endmacro
+
+%macro SCHEDULER_SWITCHTASK 0
   mov eax, [ebx+TCB_SS]
   mov [ebp+64], eax
   mov eax, [ebx+TCB_ESP]
@@ -870,16 +1358,93 @@ IRQ0_Handler:
   mov [ebp+4], eax
   mov eax, [ebx+TCB_EDI]
   mov [ebp+0], eax
-.eoi:
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
+%endmacro
+
+%macro SCHEDULER_EPILOGUE 0
   popa
   pop gs
   pop fs
   pop es
   pop ds
   iret
+%endmacro
+
+;-------------------------------------------------------------------------------
+; INTERRUPT HANDLERS
+;-------------------------------------------------------------------------------
+
+section .text
+
+;
+; IRQ0_Handler - Programmable Interval Timer
+;
+; Performs context switching.
+;
+; Calling Stack:
+;
+;   SS3
+;   ESP3
+;   EFLAGS
+;   CS3
+;   EIP
+;
+; To Do:
+;
+; - Floating-point registers
+;
+; Ideas:
+;
+; - Point ESP0 into the TCB to avoid copy from stack to TCB.
+; - Handle segments more efficiently
+;
+align 4
+IRQ0_Handler:
+.prologue:
+  SCHEDULER_PROLOGUE
+.body:
+  mov al, 0
+  call DebugIRQ
+  SCHEDULER_SAVESTATE
+  SCHEDULER_NEXTTHREAD
+  SCHEDULER_SWITCHTASK
+.eoi:
+  mov al, PIC_CMD_NONSPECIFIC_EOI
+  out PORT_PIC_MASTER_CMD, al
+.epilogue:
+  SCHEDULER_EPILOGUE
+
+;
+; IRQ1_Handler - Keyboard Controller
+;
+; Reflected back to user mode.
+;
+;;align 4
+;;IRQ1_Handler:
+;;.prologue:
+;;  SCHEDULER_PROLOGUE
+;;.body:
+;;  mov al, 1
+;;  call DebugIRQ
+;;  SCHEDULER_SAVESTATE
+;;  mov eax, [UserIRQHandlers+4*1]
+;;  or eax, eax
+;;  jz .epilogue
+;;  push dword [eax+TCB_EIP]
+;;  push eax
+;;  mov esi, .message
+;;  call PrintFormatted
+;;  add esp, 4
+;;  ;call HaltSystem
+;;  SCHEDULER_SELECTTHREAD eax
+;;  in al, PORT_KEYB_DATA
+;;  mov al, PIC_CMD_NONSPECIFIC_EOI
+;;  out PORT_PIC_MASTER_CMD, al
+;;.epilogue:
+;;  SCHEDULER_SWITCHTASK
+;;.epilogue2:
+;;  SCHEDULER_EPILOGUE
+;;.message:
+;;  db 'IRQ1 USER THREAD: %h (EIP = %h)',CR,LF,0
 
 ; Interrupt
 align 4
@@ -1114,6 +1679,12 @@ IRQ15_Handler:
   popa
   iret
 
+;-------------------------------------------------------------------------------
+; SYSTEM CALLS
+;-------------------------------------------------------------------------------
+
+section .text
+
 ; Syscall
 align 4
 SysCall_ConsoleOut:
@@ -1142,6 +1713,7 @@ SysCall_SetTCB:
   mov dword [eax+TCB_FS], SELECTOR_DATA3 | 3
   mov dword [eax+TCB_GS], SELECTOR_DATA3 | 3
   mov dword [eax+TCB_SS], SELECTOR_DATA3 | 3
+  mov dword [eax+TCB_STATE], THREAD_RUNNING
 .epilogue:
   popa
   iret
@@ -1158,301 +1730,61 @@ SysCall_SetIOPB:
   iret
 
 ;
-; IdtShuffle - Reorder bytes in IDT
+; SysCall_WaitIRQ
 ;
-;   7643 3210 --> 3276 4310
+; Calling Registers:
 ;
+;   ECX   IRQ#
+;
+;;align 4
+;;SysCall_WaitIRQ:
+;;.prologue:
+;;  SCHEDULER_PROLOGUE
+;;.body:
+;;  SCHEDULER_SAVESTATE
+;;  mov ebx, [CurrentThread]
+;;  mov [UserIRQHandlers+4*ecx], ebx
+;;  mov dword [ebx+TCB_STATE], THREAD_BLOCKED
+;;  push ebx
+;;  push ecx
+;;  mov esi, .message
+;;  call PrintFormatted
+;;  add esp, 8
+;;  SCHEDULER_NEXTTHREAD
+;;  push ebx
+;;  push ecx
+;;  mov esi, .message
+;;  call PrintFormatted
+;;  add esp, 8
+;;  SCHEDULER_SWITCHTASK
+;;.epilogue:
+;;  SCHEDULER_EPILOGUE
+;;.message:
+;;  db 'ECX = %h    EBX = %h',CR,LF,0
+
 align 4
-IdtShuffle:
-  pusha
-  mov esi, IDT.start
-  mov edi, IDT.end
-  jmp .loop_check
-.loop_start:
-  mov ebx, [esi]
-  mov ecx, [esi+4]
-  mov eax, ebx
-  and eax, 0x0000ffff
-  mov edx, ecx
-  shl edx, 16
-  or eax, edx
-  mov [esi], eax
-  mov eax, ebx
-  and eax, 0xffff0000
-  mov edx, ecx
-  shr edx, 16
-  or eax, edx
-  mov [esi+4], eax
-  add esi, 8
-.loop_check:
-  cmp esi, edi
-  jl .loop_start
-.epilogue:
-  popa
-  ret
+SysCall_WaitIRQ:
+  iret
 
 section .data
 
-align 8
-IDT:
-.start:
-.exception_de:
-  dd ExceptionDE
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_db:
-  dd ExceptionDB
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.interrupt_nmi:
-  dd InterruptNMI
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_bp:
-  dd ExceptionBP
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_of:
-  dd ExceptionOF
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_br:
-  dd ExceptionBR
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_ud:
-  dd ExceptionUD
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_nm:
-  dd ExceptionNM
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_df:
-  dd ExceptionDF
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_cso:
-  dd ExceptionCSO
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_ts:
-  dd ExceptionTS
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_np:
-  dd ExceptionNP
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_ss:
-  dd ExceptionSS
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_gp:
-  dd ExceptionGP
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_pf:
-  dd ExceptionPF
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_0f:
-  dd Exception0F
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_mf:
-  dd ExceptionMF
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_ac:
-  dd ExceptionAC
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_mc:
-  dd ExceptionMC
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_xm:
-  dd ExceptionXM
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_ve:
-  dd ExceptionVE
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_15:
-  dd Exception15
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_16:
-  dd Exception16
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_17:
-  dd Exception17
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_18:
-  dd Exception18
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_19:
-  dd Exception19
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_1a:
-  dd Exception1A
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_1b:
-  dd Exception1B
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_1c:
-  dd Exception1C
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_1d:
-  dd Exception1D
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_sx:
-  dd ExceptionSX
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.exception_1f:
-  dd Exception1F
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq0:
-  dd IRQ0_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq1:
-  dd IRQ1_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq2:
-  dd IRQ2_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq3:
-  dd IRQ3_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq4:
-  dd IRQ4_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq5:
-  dd IRQ5_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq6:
-  dd IRQ6_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq7:
-  dd IRQ7_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq8:
-  dd IRQ8_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq9:
-  dd IRQ9_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq10:
-  dd IRQ10_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq11:
-  dd IRQ11_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq12:
-  dd IRQ12_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq13:
-  dd IRQ13_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq14:
-  dd IRQ14_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.irq15:
-  dd IRQ15_Handler
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL0 | ID_PRESENT
-.syscall_console_out:
-  dd SysCall_ConsoleOut
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
-.syscall_settcb:
-  dd SysCall_SetTCB
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
-.syscall_setiopb:
-  dd SysCall_SetIOPB
-  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
-.end:
-
-IDTR:
-.limit:
-  dw (IDT.end - IDT.start - 1)
-.base:
-  dd IDT
-
-MessageExceptionDE:
-  db 'Divide-by-zero Error (#DE)',0
-
-MessageExceptionDB:
-  db 'Debug (#DB)',0
-
-MessageInterruptNMI:
-  db 'Non-maskable interrupt',0
-
-MessageExceptionBP:
-  db 'Breakpoint (#BP)',0
-
-MessageExceptionOF:
-  db 'Overflow (#OF)',0
-
-MessageExceptionBR:
-  db 'Bound Range Exceeded (#BR)',0
-
-MessageExceptionUD:
-  db 'Invalid Opcode (#UD)',0
-
-MessageExceptionNM:
-  db 'Device Not Available (#NM)',0
-
-MessageExceptionDF:
-  db 'Double Fault (#DF)',0
-
-MessageExceptionCSO:
-  db 'Coprocessor Segment Overrun',0
-
-MessageExceptionTS:
-  db 'Invalid TSS (#TS)',0
-
-MessageExceptionNP:
-  db 'Segment Not Present (#NP)',0
-
-MessageExceptionSS:
-  db 'Stack-Segment Fault (#SS)',0
-
-MessageExceptionGP:
-  db 'General Protection Fault (#GP)',0
-
-MessageExceptionPF:
-  db 'Page Fault (#PF)',0
-
-MessageException0F:
-  db 'Unknown Exception (0Fh)',0
-
-MessageExceptionMF:
-  db 'x87 Floating-Point Exception (#MF)',0
-
-MessageExceptionAC:
-  db 'Alignment Check (#AC)',0
-
-MessageExceptionMC:
-  db 'Machine Check (#MC)',0
-
-MessageExceptionXM:
-  db 'SIMD Floating-Point Exception (#XM)',0
-
-MessageExceptionVE:
-  db 'Virtualization Exception (#VE)',0
-
-; FIXME: Control Protection Exception
-MessageException15:
-  db 'Unknown Exception (15h)',0
-
-MessageException16:
-  db 'Unknown Exception (16h)',0
-
-MessageException17:
-  db 'Unknown Exception (17h)',0
-
-MessageException18:
-  db 'Unknown Exception (18h)',0
-
-MessageException19:
-  db 'Unknown Exception (19h)',0
-
-MessageException1A:
-  db 'Unknown Exception (1Ah)',0
-
-MessageException1B:
-  db 'Unknown Exception (1Bh)',0
-
-MessageException1C:
-  db 'Unknown Exception (1Ch)',0
-
-MessageException1D:
-  db 'Unknown Exception (1Dh)',0
-
-MessageExceptionSX:
-  db 'Security Exception (#SE)',0
-
-MessageException1F:
-  db 'Unknown Exception (1Fh)',0
+UserIRQHandlers:
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
 
 ;-------------------------------------------------------------------------------
 ; PANIC
@@ -1490,19 +1822,42 @@ section .text
 ;   EAX = error code
 ;
 Panic:
-  pusha
+  push dword [ebp+0]  ; EDI
+  push dword [ebp+4]  ; ESI
+  push dword [ebp+8]  ; EBP
+  push dword [ebp+12] ; ESP
+  push dword [ebp+16] ; EBX
+  push dword [ebp+20] ; EDX
+  push dword [ebp+24] ; ECX
+  push dword [ebp+28] ; EAX
+  push dword [ebp+32] ; GS
+  push dword [ebp+36] ; FS
+  push dword [ebp+40] ; ES
+  push dword [ebp+44] ; DS
+  mov eax, cr2
   push eax
+  push dword [ebp+48] ; ERROR CODE
+  push dword [ebp+52] ; EIP
+  push dword [ebp+56] ; CS
+  push dword [ebp+60] ; EFLAGS
+  push dword [ebp+64] ; ESP
+  push dword [ebp+68] ; SS
   push esi
-  mov esi, MessagePanic1
+  mov esi, MessagePanic
   call PrintFormatted
-  add esp, 8
-  popa
   jmp HaltSystem
 
 section .data
 
-MessagePanic1:
-  db CR,LF,'! EXCEPTION %s    ERROR CODE %h',CR,LF,0
+MessagePanic:
+  db CR,LF
+  db '! EXCEPTION %s',CR,LF
+  db '!  SS=%h  ESP=%h             EFLAGS=%h',CR,LF
+  db '!  CS=%h  EIP=%h  ERR=%h  CR2=%h',CR,LF
+  db '!  DS=%h   ES=%h   FS=%h   GS=%h',CR,LF
+  db '! EAX=%h  ECX=%h  EDX=%h  EBX=%h',CR,LF
+  db '! ESP=%h  EBP=%h  ESI=%h  EDI=%h',CR,LF
+  db 0
 
 section .text
 
