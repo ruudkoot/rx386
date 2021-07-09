@@ -26,11 +26,11 @@ Copyright db 'Copyright (c) 2021, Ruud Koot <inbox@ruudkoot.nl>',CR,LF,0
 Main:
 .prologue:
   mov eax, SELECTOR_DATA0
-  mov ds, eax
-  mov es, eax
-  mov fs, eax
-  mov gs, eax
-  mov ss, eax
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+  mov ss, ax
   mov esp, KernelStack.top
   call GdtShuffle
   call IdtShuffle
@@ -540,6 +540,9 @@ IDT:
 .syscall_waitirq:
   dd SysCall_WaitIRQ
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_eoi:
+  dd SysCall_EOI
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .end:
 
 IDTR:
@@ -554,608 +557,377 @@ IDTR:
 
 NO_ERROR_CODE equ 0xDEADC0DE
 
+%macro EXCEPTION_PROLOGUE_NO_ERROR_CODE 0
+  push NO_ERROR_CODE
+  pusha
+  xor eax, eax
+  mov ax, ds
+  push eax
+  mov ax, es
+  push eax
+  mov ax, fs
+  push eax
+  mov ax, gs
+  push eax
+  mov eax, SELECTOR_DATA0
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+  mov ebp, esp
+%endmacro
+
+%macro EXCEPTION_PROLOGUE_HAS_ERROR_CODE 0
+  pusha
+  xor eax, eax
+  mov ax, ds
+  push eax
+  mov ax, es
+  push eax
+  mov ax, fs
+  push eax
+  mov ax, gs
+  push eax
+  mov eax, SELECTOR_DATA0
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+  mov ebp, esp
+%endmacro
+
+%macro EXCEPTION_EPILOGUE 0
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  popa
+  add esp, 4
+  iret
+%endmacro
+
 section .text
 
 ; Fault
 align 4
 ExceptionDE:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionDE
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault or Trap
 align 4
 ExceptionDB:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionDB
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Interrupt
 align 4
 InterruptNMI:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageInterruptNMI
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Trap
 align 4
 ExceptionBP:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionBP
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Trap
 align 4
 ExceptionOF:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionOF
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 align 4
 ExceptionBR:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionBR
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 align 4
 ExceptionUD:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionUD
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 align 4
 ExceptionNM:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionNM
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Abort with Error Code
 align 4
 ExceptionDF:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionDF
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 ; (287 & 387 only)
 align 4
 ExceptionCSO:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionCSO
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault with Error Code
 align 4
 ExceptionTS:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionTS
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault with Error Code
 align 4
 ExceptionNP:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionNP
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault with Error Code
 align 4
 ExceptionSS:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionSS
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault with Error Code
 align 4
 ExceptionGP:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionGP
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault with Error Code
 align 4
 ExceptionPF:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionPF
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception0F:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException0F
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 align 4
 ExceptionMF:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionMF
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault with Error Code
 align 4
 ExceptionAC:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionAC
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Abort
 align 4
 ExceptionMC:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionMC
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 align 4
 ExceptionXM:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionXM
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Fault
 align 4
 ExceptionVE:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageExceptionVE
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception15:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException15
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception16:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException16
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception17:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException17
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception18:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException18
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception19:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException19
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception1A:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException1A
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception1B:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException1B
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception1C:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException1C
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception1D:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException1D
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Unknown with Error Code
 align 4
 ExceptionSX:
-  cli
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_HAS_ERROR_CODE
 .body:
   mov esi, MessageExceptionSX
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 ; Reserved
 align 4
 Exception1F:
-  cli
-  push NO_ERROR_CODE
-  push ds
-  push es
-  push fs
-  push gs
-  pusha
-  mov ebp, esp
+  EXCEPTION_PROLOGUE_NO_ERROR_CODE
 .body:
   mov esi, MessageException1F
   jmp Panic
 .epilogue:
-  popa
-  add esp, 20
-  iret
+  EXCEPTION_EPILOGUE
 
 section .data
 
@@ -1261,13 +1033,17 @@ MessageException1F:
 ;-------------------------------------------------------------------------------
 
 %macro SCHEDULER_PROLOGUE 0
-  cli
-  push ds ; FIXME: partial write
-  push es ; FIXME: partial write
-  push fs ; FIXME: partial write
-  push gs ; FIXME: partial write
   pusha
-  mov ax, SELECTOR_DATA0
+  xor eax, eax
+  mov ax, ds
+  push eax
+  mov ax, es
+  push eax
+  mov ax, fs
+  push eax
+  mov ax, gs
+  push eax
+  mov eax, SELECTOR_DATA0
   mov ds, ax
   mov es, ax
   mov fs, ax
@@ -1287,27 +1063,27 @@ MessageException1F:
   mov [ebx+TCB_CS], eax
   mov eax, [ebp+48]
   mov [ebx+TCB_EIP], eax
-  mov eax, [ebp+44]
+  mov eax, [ebp+12]
   mov [ebx+TCB_DS], eax
-  mov eax, [ebp+40]
-  mov [ebx+TCB_ES], eax
-  mov eax, [ebp+36]
-  mov [ebx+TCB_FS], eax
-  mov eax, [ebp+32]
-  mov [ebx+TCB_GS], eax
-  mov eax, [ebp+28]
-  mov [ebx+TCB_EAX], eax
-  mov eax, [ebp+24]
-  mov [ebx+TCB_ECX], eax
-  mov eax, [ebp+20]
-  mov [ebx+TCB_EDX], eax
-  mov eax, [ebp+16]
-  mov [ebx+TCB_EBX], eax
   mov eax, [ebp+8]
-  mov [ebx+TCB_EBP], eax
+  mov [ebx+TCB_ES], eax
   mov eax, [ebp+4]
-  mov [ebx+TCB_ESI], eax
+  mov [ebx+TCB_FS], eax
   mov eax, [ebp+0]
+  mov [ebx+TCB_GS], eax
+  mov eax, [ebp+44]
+  mov [ebx+TCB_EAX], eax
+  mov eax, [ebp+40]
+  mov [ebx+TCB_ECX], eax
+  mov eax, [ebp+36]
+  mov [ebx+TCB_EDX], eax
+  mov eax, [ebp+32]
+  mov [ebx+TCB_EBX], eax
+  mov eax, [ebp+24]
+  mov [ebx+TCB_EBP], eax
+  mov eax, [ebp+20]
+  mov [ebx+TCB_ESI], eax
+  mov eax, [ebp+16]
   mov [ebx+TCB_EDI], eax
 %endmacro
 
@@ -1337,35 +1113,35 @@ MessageException1F:
   mov eax, [ebx+TCB_EIP]
   mov [ebp+48], eax
   mov eax, [ebx+TCB_DS]
-  mov [ebp+44], eax
+  mov [ebp+12], eax
   mov eax, [ebx+TCB_ES]
-  mov [ebp+40], eax
-  mov eax, [ebx+TCB_FS]
-  mov [ebp+36], eax
-  mov eax, [ebx+TCB_GS]
-  mov [ebp+32], eax
-  mov eax, [ebx+TCB_EAX]
-  mov [ebp+28], eax
-  mov eax, [ebx+TCB_ECX]
-  mov [ebp+24], eax
-  mov eax, [ebx+TCB_EDX]
-  mov [ebp+20], eax
-  mov eax, [ebx+TCB_EBX]
-  mov [ebp+16], eax
-  mov eax, [ebx+TCB_EBP]
   mov [ebp+8], eax
-  mov eax, [ebx+TCB_ESI]
+  mov eax, [ebx+TCB_FS]
   mov [ebp+4], eax
-  mov eax, [ebx+TCB_EDI]
+  mov eax, [ebx+TCB_GS]
   mov [ebp+0], eax
+  mov eax, [ebx+TCB_EAX]
+  mov [ebp+44], eax
+  mov eax, [ebx+TCB_ECX]
+  mov [ebp+40], eax
+  mov eax, [ebx+TCB_EDX]
+  mov [ebp+36], eax
+  mov eax, [ebx+TCB_EBX]
+  mov [ebp+32], eax
+  mov eax, [ebx+TCB_EBP]
+  mov [ebp+24], eax
+  mov eax, [ebx+TCB_ESI]
+  mov [ebp+20], eax
+  mov eax, [ebx+TCB_EDI]
+  mov [ebp+16], eax
 %endmacro
 
 %macro SCHEDULER_EPILOGUE 0
-  popa
   pop gs
   pop fs
   pop es
   pop ds
+  popa
   iret
 %endmacro
 
@@ -1408,8 +1184,11 @@ IRQ0_Handler:
   SCHEDULER_NEXTTHREAD
   SCHEDULER_SWITCHTASK
 .eoi:
-  mov al, PIC_CMD_NONSPECIFIC_EOI
+  mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL0
   out PORT_PIC_MASTER_CMD, al
+  ;in al, PORT_KEYB_DATA
+  ;mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL1
+  ;out PORT_PIC_MASTER_CMD, al
 .epilogue:
   SCHEDULER_EPILOGUE
 
@@ -1418,53 +1197,45 @@ IRQ0_Handler:
 ;
 ; Reflected back to user mode.
 ;
-;;align 4
-;;IRQ1_Handler:
-;;.prologue:
-;;  SCHEDULER_PROLOGUE
-;;.body:
-;;  mov al, 1
-;;  call DebugIRQ
-;;  SCHEDULER_SAVESTATE
-;;  mov eax, [UserIRQHandlers+4*1]
-;;  or eax, eax
-;;  jz .epilogue
-;;  push dword [eax+TCB_EIP]
-;;  push eax
-;;  mov esi, .message
-;;  call PrintFormatted
-;;  add esp, 4
-;;  ;call HaltSystem
-;;  SCHEDULER_SELECTTHREAD eax
-;;  in al, PORT_KEYB_DATA
-;;  mov al, PIC_CMD_NONSPECIFIC_EOI
-;;  out PORT_PIC_MASTER_CMD, al
-;;.epilogue:
-;;  SCHEDULER_SWITCHTASK
-;;.epilogue2:
-;;  SCHEDULER_EPILOGUE
-;;.message:
-;;  db 'IRQ1 USER THREAD: %h (EIP = %h)',CR,LF,0
-
-; Interrupt
+; FIXME:
+;
+; - Does not schedule the thread immediately.
+;
 align 4
 IRQ1_Handler:
-  cli
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
   mov al, 1
   call DebugIRQ
-  in al, PORT_KEYB_DATA
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
+  SCHEDULER_SAVESTATE
+  mov ebx, [UserIRQHandlers+4*1]
+  or ebx, ebx
+  jz .no_user_handler_waiting
+  xor eax, eax
+  mov [UserIRQHandlers+4*1], eax
+  mov dword [ebx+TCB_STATE], THREAD_RUNNING
+  SCHEDULER_SELECTTHREAD ebx
+  SCHEDULER_SWITCHTASK
 .epilogue:
-  popa
-  iret
+  SCHEDULER_EPILOGUE
+.no_user_handler_waiting:
+  mov eax, [IRQPending+4*1]
+  or eax, eax
+  jnz .double_irq
+  inc eax
+  mov dword [IRQPending+4*1], eax
+  jmp .epilogue
+.double_irq:
+  mov esi, .double_irq_message
+  call PrintString
+  call HaltSystem
+.double_irq_message:
+  db 'DOUBLE IRQ1',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ2_Handler:
-  cli
   pusha
 .body:
   mov al, 2
@@ -1472,14 +1243,17 @@ IRQ2_Handler:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ2!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ3_Handler:
-  cli
   pusha
 .body:
   mov al, 3
@@ -1487,14 +1261,17 @@ IRQ3_Handler:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ3!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ4_Handler:
-  cli
   pusha
 .body:
   mov al, 4
@@ -1502,14 +1279,17 @@ IRQ4_Handler:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ4!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ5_Handler:
-  cli
   pusha
 .body:
   mov al, 5
@@ -1517,14 +1297,17 @@ IRQ5_Handler:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ5!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ6_Handler:
-  cli
   pusha
 .body:
   mov al, 6
@@ -1532,29 +1315,35 @@ IRQ6_Handler:
   mov al, PIC_CMD_NONSPECIFIC_EOI
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ6!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ7_Handler:
-  cli
   pusha
 .body:
   mov al, 7
   call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
+  mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL7
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
-  jmp HaltSystem
+  mov esi, .message
+  call PrintString
+  ;jmp HaltSystem
   popa
   iret
+.message:
+  db '### IRQ7! ###',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ8_Handler:
-  cli
   pusha
 .body:
   mov al, 8
@@ -1563,14 +1352,17 @@ IRQ8_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ8!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ9_Handler:
-  cli
   pusha
 .body:
   mov al, 9
@@ -1579,14 +1371,17 @@ IRQ9_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ9!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ10_Handler:
-  cli
   pusha
 .body:
   mov al, 10
@@ -1595,14 +1390,17 @@ IRQ10_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ10!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ11_Handler:
-  cli
   pusha
 .body:
   mov al, 11
@@ -1611,14 +1409,17 @@ IRQ11_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ11!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ12_Handler:
-  cli
   pusha
 .body:
   mov al, 12
@@ -1627,14 +1428,17 @@ IRQ12_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ12!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ13_Handler:
-  cli
   pusha
 .body:
   mov al, 13
@@ -1643,14 +1447,17 @@ IRQ13_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ13!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ14_Handler:
-  cli
   pusha
 .body:
   mov al, 14
@@ -1659,14 +1466,17 @@ IRQ14_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ14!',CR,LF,0
 
 ; Interrupt
 align 4
 IRQ15_Handler:
-  cli
   pusha
 .body:
   mov al, 15
@@ -1675,9 +1485,13 @@ IRQ15_Handler:
   out PORT_PIC_SLAVE_CMD, al
   out PORT_PIC_MASTER_CMD, al
 .epilogue:
+  mov esi, .message
+  call PrintString
   jmp HaltSystem
   popa
   iret
+.message:
+  db 'UNEXPECTED IRQ15!',CR,LF,0
 
 ;-------------------------------------------------------------------------------
 ; SYSTEM CALLS
@@ -1688,7 +1502,6 @@ section .text
 ; Syscall
 align 4
 SysCall_ConsoleOut:
-  cli
   pusha
 .body:
   call ConsoleOut
@@ -1699,7 +1512,6 @@ SysCall_ConsoleOut:
 ; Syscall
 align 4
 SysCall_SetTCB:
-  cli
   pusha
 .body:
   mov edx, TCB_SIZE
@@ -1721,7 +1533,6 @@ SysCall_SetTCB:
 ; Syscall
 align 4
 SysCall_SetIOPB:
-  cli
   pusha
 .body:
   mov [TSS.iopb+4*eax], edx
@@ -1736,39 +1547,75 @@ SysCall_SetIOPB:
 ;
 ;   ECX   IRQ#
 ;
-;;align 4
-;;SysCall_WaitIRQ:
-;;.prologue:
-;;  SCHEDULER_PROLOGUE
-;;.body:
-;;  SCHEDULER_SAVESTATE
-;;  mov ebx, [CurrentThread]
-;;  mov [UserIRQHandlers+4*ecx], ebx
-;;  mov dword [ebx+TCB_STATE], THREAD_BLOCKED
-;;  push ebx
-;;  push ecx
-;;  mov esi, .message
-;;  call PrintFormatted
-;;  add esp, 8
-;;  SCHEDULER_NEXTTHREAD
-;;  push ebx
-;;  push ecx
-;;  mov esi, .message
-;;  call PrintFormatted
-;;  add esp, 8
-;;  SCHEDULER_SWITCHTASK
-;;.epilogue:
-;;  SCHEDULER_EPILOGUE
-;;.message:
-;;  db 'ECX = %h    EBX = %h',CR,LF,0
-
 align 4
 SysCall_WaitIRQ:
+.prologue:
+  SCHEDULER_PROLOGUE
+.body:
+  mov eax, [IRQPending+4*ecx]
+  or eax, eax
+  jnz .epilogue
+  SCHEDULER_SAVESTATE
+  mov ebx, [CurrentThread]
+  mov eax, [UserIRQHandlers+4*ecx]
+  or eax, eax
+  jnz .double_wait
+  mov [UserIRQHandlers+4*ecx], ebx
+  mov dword [ebx+TCB_STATE], THREAD_BLOCKED
+  SCHEDULER_NEXTTHREAD
+  SCHEDULER_SWITCHTASK
+.epilogue:
+  xor eax, eax
+  mov dword [IRQPending+4*ecx], eax
+  SCHEDULER_EPILOGUE
+.double_wait:
+  mov esi, .double_wait_message
+  call PrintString
+  call HaltSystem
+.double_wait_message:
+  db 'DOUBLE WAITIRQ',CR,LF,0
+
+;
+; SysCall_EOI
+;
+; Calling Registers:
+;
+;    CL   IRQ#
+;
+; FIXME:
+;
+; - Slave PIC
+;
+SysCall_EOI:
+  pusha
+  and cl, 0x07
+  mov al, PIC_CMD_SPECIFIC_EOI
+  or al, cl
+  out PORT_PIC_MASTER_CMD, al
+  popa
   iret
 
 section .data
 
 UserIRQHandlers:
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+
+IRQPending:
   dd 0
   dd 0
   dd 0
@@ -1822,18 +1669,18 @@ section .text
 ;   EAX = error code
 ;
 Panic:
-  push dword [ebp+0]  ; EDI
-  push dword [ebp+4]  ; ESI
-  push dword [ebp+8]  ; EBP
-  push dword [ebp+12] ; ESP
-  push dword [ebp+16] ; EBX
-  push dword [ebp+20] ; EDX
-  push dword [ebp+24] ; ECX
-  push dword [ebp+28] ; EAX
-  push dword [ebp+32] ; GS
-  push dword [ebp+36] ; FS
-  push dword [ebp+40] ; ES
-  push dword [ebp+44] ; DS
+  push dword [ebp+16] ; EDI
+  push dword [ebp+20] ; ESI
+  push dword [ebp+24] ; EBP
+  push dword [ebp+28] ; ESP
+  push dword [ebp+32] ; EBX
+  push dword [ebp+36] ; EDX
+  push dword [ebp+40] ; ECX
+  push dword [ebp+44] ; EAX
+  push dword [ebp+0]  ; GS
+  push dword [ebp+4]  ; FS
+  push dword [ebp+8]  ; ES
+  push dword [ebp+12] ; DS
   mov eax, cr2
   push eax
   push dword [ebp+48] ; ERROR CODE
@@ -1872,7 +1719,7 @@ DebugIRQ:
   pusha
   cbw
   mov ebx, eax
-  inc byte [CONSOLE_FRAMEBUFFER+2*ebx+128]
+  inc byte [CONSOLE_FRAMEBUFFER+2*ebx+128+CONSOLE_ROWS*CONSOLE_COLS*2]
   popa
   ret
 
@@ -1952,9 +1799,12 @@ ConsoleOut:
   mov esi, CONSOLE_FRAMEBUFFER+2*CONSOLE_COLS
   mov ecx, 2*CONSOLE_COLS*(CONSOLE_ROWS-1)
   cld
-  rep movsd
-  ; FIXME: fill newline
+  rep movsb
   mov esi, eax
+  mov ax, 0x0700 ; FIXME: ConsoleAttr
+  mov ecx, CONSOLE_COLS
+  mov edi, CONSOLE_FRAMEBUFFER+2*CONSOLE_COLS*(CONSOLE_ROWS-1)
+  rep stosw
   mov edi, edx
   dec edi
 .update_cursor:

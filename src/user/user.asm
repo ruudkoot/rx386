@@ -49,41 +49,58 @@ Main:
 align 256
 ThreadA:
   mov al, 'A'
-  int SYSCALL_CONSOLEOUT
+  ;int SYSCALL_CONSOLEOUT
   jmp ThreadA
+
+  section .text
 
 align 256
 ThreadB:
-  mov al, 'B'
-  ;mov al, '['
+  mov al, '['
+  ;int SYSCALL_CONSOLEOUT
+  mov ecx, 1
+  int SYSCALL_WAITIRQ
+  mov al, '*'
+  ;int SYSCALL_CONSOLEOUT
+  in al, PORT_KEYB_DATA
+  mov ecx, 1
+  int SYSCALL_EOI
   int SYSCALL_CONSOLEOUT
-  ;mov ecx, 1
-  ;int SYSCALL_WAITIRQ
-  ;mov al, '*'
-  ;int SYSCALL_CONSOLEOUT
-  ;jmp .after
-  ;int 3
-  ;in al, PORT_KEYB_DATA
-  ;mov al, 'B'
-  ;int SYSCALL_CONSOLEOUT
-  ;mov al, ']'
+  mov al, ']'
   ;int SYSCALL_CONSOLEOUT
   jmp ThreadB
 
 align 256
 ThreadC:
   mov al, 'C'
-  int SYSCALL_CONSOLEOUT
+  ;int SYSCALL_CONSOLEOUT
   jmp ThreadC
 
 align 256
 ThreadD:
+  mov eax, [StateD]
+  or eax, eax
+  jnz .halt
+  inc eax
+  mov [StateD], eax
   mov al, 'D'
-  int SYSCALL_CONSOLEOUT
+  ;int SYSCALL_CONSOLEOUT
+  mov eax, [StateD]
+  or eax, eax
+  jz .halt
+  dec eax
+  mov [StateD], eax
+  mov al, 'd'
+  ;int SYSCALL_CONSOLEOUT
   jmp ThreadD
+.halt:
+  mov al, 'X'
+  int SYSCALL_CONSOLEOUT
+  jmp .halt
 
 section .data
 
+StateD dd 0
 db 'DATA',0
 
 section .bss

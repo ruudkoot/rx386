@@ -113,7 +113,7 @@ Main:
 VideoSetup:
   push ax
   push bx
-%if CONSOLE_ROWS = 50
+%if CONSOLE_ROWS > 25
   ;mov ax, BIOS_10H_SET_VIDEO_MODE | VIDEO_MODE_3
   ;int 0x10
   mov ax, BIOS_10H_LOAD_8X8_FONT
