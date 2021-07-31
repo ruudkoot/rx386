@@ -13,9 +13,13 @@ section .text   progbits  alloc   exec    nowrite   align=4096
 section .data   progbits  alloc   noexec  write     align=4096
 section .bss    nobits    alloc   noexec  write     align=4096
 
+extern c_entry
+
 section .text
 
-USER_START:
+global _USER_START
+
+_USER_START:
   mov esp, StackA.top
   jmp Main
 
@@ -27,6 +31,7 @@ Main:
 .signature:
   mov esi, Signature
   call PrintString
+  call c_entry
 .set_iopb:
   mov eax, 3
   mov edx, 0xFFFFFF00 ; 0x60 - 0x67
@@ -228,3 +233,19 @@ PrintFormatted:
 section .data
 
 HexDigits db '0123456789ABCDEF'
+
+;-------------------------------------------------------------------------------
+; USER.C
+;-------------------------------------------------------------------------------
+
+section .text
+
+global _consoleout
+
+_consoleout:
+  pusha
+  mov ebp, esp
+  mov eax, [ebp+36]
+  int SYSCALL_CONSOLEOUT
+  popa
+  ret
