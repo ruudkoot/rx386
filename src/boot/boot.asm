@@ -119,6 +119,9 @@ VideoSetup:
   mov ax, BIOS_10H_LOAD_8X8_FONT
   xor bx, bx
   int 0x10
+  mov ax, BIOS_10H_CURSOR_SHAPE
+  mov cx, 0x0607
+  int 0x10
 %endif
   pop bx
   pop ax

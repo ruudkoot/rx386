@@ -421,6 +421,7 @@ BPB_SIGNATURE               equ 0x1FE
 ;-------------------------------------------------------------------------------
 
 BIOS_10H_SET_VIDEO_MODE     equ 0x0000
+BIOS_10H_CURSOR_SHAPE       equ 0x0100
 BIOS_10H_LOAD_8X8_FONT      equ 0x1112
 
 VIDEO_MODE_3                equ 0x0003
