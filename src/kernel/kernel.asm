@@ -107,6 +107,19 @@ TCB:
   dd SELECTOR_DATA3 | 3 ; GS
   dd SELECTOR_DATA3 | 3 ; SS
   dd THREAD_RUNNING     ; STATE
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
 .thread1:
   dd .thread2           ; NEXT
   dd 0x00000000         ; CR3
@@ -127,6 +140,19 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
   dd THREAD_BLOCKED     ; STATE
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
 .thread2:
   dd .thread3           ; NEXT
   dd 0x00000000         ; CR3
@@ -147,6 +173,19 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
   dd THREAD_BLOCKED     ; STATE
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
 .thread3:
   dd .thread0           ; NEXT
   dd 0x00000000         ; CR3
@@ -167,6 +206,19 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
   dd THREAD_BLOCKED     ; STATE
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
 .end:
 
 ;-------------------------------------------------------------------------------
@@ -1182,6 +1234,7 @@ IRQ0_Handler:
   call DebugIRQ
   SCHEDULER_SAVESTATE
   SCHEDULER_NEXTTHREAD
+  call DebugThread
   SCHEDULER_SWITCHTASK
 .eoi:
   mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL0
@@ -1707,6 +1760,22 @@ MessagePanic:
   db 0
 
 section .text
+
+;
+; DebugIRQ
+;
+; Calling Regsiters:
+;
+;   EBX = thread
+;
+DebugThread:
+  pusha
+  sub ebx, TCB.start
+  shr ebx, 7
+  add bl, 'A'
+  mov [CONSOLE_FRAMEBUFFER+CONSOLE_ROWS*CONSOLE_COLS*2], bl
+  popa
+  ret
 
 ;
 ; DebugIRQ

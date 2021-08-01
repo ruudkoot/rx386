@@ -56,7 +56,7 @@ Main:
 align 256
 ThreadA:
   call c_thread_a
-.halt
+.halt:
   jmp .halt
 
 align 256
