@@ -2,13 +2,29 @@
 
 extern unsigned char _inb(int port);
 extern int _syscall_consoleout(char c);
-extern int _syscall_waitirq(int irq);
+extern int _syscall_wait(int notification);
 extern int _syscall_eoi(int irq);
 
 int getchar();
 int putchar(int c);
 int printf(const char * format, ...);
 int readline(char * buf, size_t len);
+
+#define NOTIFICATION_IRQ1   1
+#define NOTIFICATION_IRQ2   2
+#define NOTIFICATION_IRQ3   3
+#define NOTIFICATION_IRQ4   4
+#define NOTIFICATION_IRQ5   5
+#define NOTIFICATION_IRQ6   6
+#define NOTIFICATION_IRQ7   7
+#define NOTIFICATION_IRQ8   8
+#define NOTIFICATION_IRQ9   9
+#define NOTIFICATION_IRQ10  10
+#define NOTIFICATION_IRQ11  11
+#define NOTIFICATION_IRQ12  12
+#define NOTIFICATION_IRQ13  13
+#define NOTIFICATION_IRQ14  14
+#define NOTIFICATION_IRQ15  15
 
 #define PORT_KEYB_DATA 0x060
 
@@ -33,9 +49,9 @@ int c_thread_a() {
 int c_thread_b() {
   unsigned char k;
   for (;;) {
-    _syscall_waitirq(1);
+    _syscall_wait(NOTIFICATION_IRQ1);
     k = _inb(PORT_KEYB_DATA);
-    _syscall_eoi(1);
+    _syscall_eoi(NOTIFICATION_IRQ1);
     if ((kbdbuf_end+1) % KBDBUF_SIZE != kbdbuf_start) {
       kbdbuf[kbdbuf_end] = k;
       kbdbuf_end = (kbdbuf_end + 1) % KBDBUF_SIZE;

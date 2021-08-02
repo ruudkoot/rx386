@@ -222,6 +222,84 @@ TCB:
 .end:
 
 ;-------------------------------------------------------------------------------
+; NOTIFICATIONS
+;-------------------------------------------------------------------------------
+
+NOTIFICATION_IDLE     equ 0
+NOTIFICATION_ACTIVE   equ 1
+NOTIFICATION_WAITING  equ 2
+
+section .data
+
+NotificationState:
+  dd NOTIFICATION_IDLE  ; IRQ0
+  dd NOTIFICATION_IDLE  ; IRQ1
+  dd NOTIFICATION_IDLE  ; IRQ2
+  dd NOTIFICATION_IDLE  ; IRQ3
+  dd NOTIFICATION_IDLE  ; IRQ4
+  dd NOTIFICATION_IDLE  ; IRQ5
+  dd NOTIFICATION_IDLE  ; IRQ6
+  dd NOTIFICATION_IDLE  ; IRQ7
+  dd NOTIFICATION_IDLE  ; IRQ8
+  dd NOTIFICATION_IDLE  ; IRQ9
+  dd NOTIFICATION_IDLE  ; IRQ10
+  dd NOTIFICATION_IDLE  ; IRQ11
+  dd NOTIFICATION_IDLE  ; IRQ12
+  dd NOTIFICATION_IDLE  ; IRQ13
+  dd NOTIFICATION_IDLE  ; IRQ14
+  dd NOTIFICATION_IDLE  ; IRQ15
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+  dd NOTIFICATION_IDLE
+
+NotificationQueue:
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+
+;-------------------------------------------------------------------------------
 ; TASK STATE SEGMENT
 ;-------------------------------------------------------------------------------
 
@@ -589,8 +667,8 @@ IDT:
 .syscall_setiopb:
   dd SysCall_SetIOPB
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
-.syscall_waitirq:
-  dd SysCall_WaitIRQ
+.syscall_wait:
+  dd SysCall_Wait
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .syscall_eoi:
   dd SysCall_EOI
@@ -1262,22 +1340,22 @@ IRQ1_Handler:
   mov al, 1
   call DebugIRQ
   SCHEDULER_SAVESTATE
-  mov ebx, [UserIRQHandlers+4*1]
+  mov ebx, [NotificationQueue+4*1]
   or ebx, ebx
   jz .no_user_handler_waiting
   xor eax, eax
-  mov [UserIRQHandlers+4*1], eax
+  mov [NotificationQueue+4*1], eax
   mov dword [ebx+TCB_STATE], THREAD_RUNNING
   SCHEDULER_SELECTTHREAD ebx
   SCHEDULER_SWITCHTASK
 .epilogue:
   SCHEDULER_EPILOGUE
 .no_user_handler_waiting:
-  mov eax, [IRQPending+4*1]
+  mov eax, [NotificationState+4*1]
   or eax, eax
   jnz .double_irq
   inc eax
-  mov dword [IRQPending+4*1], eax
+  mov dword [NotificationState+4*1], eax
   jmp .epilogue
 .double_irq:
   mov esi, .double_irq_message
@@ -1594,39 +1672,53 @@ SysCall_SetIOPB:
   iret
 
 ;
-; SysCall_WaitIRQ
+; SysCall_Wait - Wait on a Notification
 ;
 ; Calling Registers:
 ;
-;   ECX   IRQ#
+;   ECX   Notification/IRQ#
+;
+; State Diagram:
+;
+;   IDLE -> WAITING
+;   ACTIVE -> IDLE
+;   WAITING -> WAITING
 ;
 align 4
-SysCall_WaitIRQ:
+SysCall_Wait:
 .prologue:
   SCHEDULER_PROLOGUE
 .body:
-  mov eax, [IRQPending+4*ecx]
-  or eax, eax
-  jnz .epilogue
+  mov eax, [NotificationState+4*ecx]
+  cmp eax, NOTIFICATION_ACTIVE
+  jne .not_active
+.active:
+  mov eax, NOTIFICATION_IDLE
+  mov dword [NotificationState+4*ecx], eax
+  jmp .epilogue
+.not_active:
   SCHEDULER_SAVESTATE
   mov ebx, [CurrentThread]
-  mov eax, [UserIRQHandlers+4*ecx]
+  mov eax, [NotificationQueue+4*ecx]
   or eax, eax
-  jnz .double_wait
-  mov [UserIRQHandlers+4*ecx], ebx
+  jnz .error_double_wait
+  mov [NotificationQueue+4*ecx], ebx
   mov dword [ebx+TCB_STATE], THREAD_BLOCKED
   SCHEDULER_NEXTTHREAD
   SCHEDULER_SWITCHTASK
 .epilogue:
-  xor eax, eax
-  mov dword [IRQPending+4*ecx], eax
   SCHEDULER_EPILOGUE
-.double_wait:
-  mov esi, .double_wait_message
+.error_double_wait:
+  mov esi, Message_DoubleWait
   call PrintString
   call HaltSystem
-.double_wait_message:
-  db 'DOUBLE WAITIRQ',CR,LF,0
+
+section .data
+
+Message_DoubleWait:
+  db 'DOUBLE WAIT',CR,LF,0
+
+section .text
 
 ;
 ; SysCall_EOI
@@ -1639,6 +1731,7 @@ SysCall_WaitIRQ:
 ;
 ; - Slave PIC
 ;
+align 4
 SysCall_EOI:
   pusha
   and cl, 0x07
@@ -1647,44 +1740,6 @@ SysCall_EOI:
   out PORT_PIC_MASTER_CMD, al
   popa
   iret
-
-section .data
-
-UserIRQHandlers:
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-
-IRQPending:
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
-  dd 0
 
 ;-------------------------------------------------------------------------------
 ; PANIC
