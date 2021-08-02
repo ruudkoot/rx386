@@ -77,18 +77,14 @@ BusyLoop:
 
 TCB_SIZE equ TCB.thread1 - TCB.thread0
 
-THREAD_RUNNING  equ 1
-THREAD_BLOCKED  equ 2
-
 section .data
-
-CurrentThread dd TCB.thread0
 
 align 4
 TCB:
 .start:
 .thread0:
-  dd .thread1           ; NEXT
+  dd .thread0           ; NEXT
+  dd .thread0           ; PREV
   dd 0x00000000         ; CR3
   dd USER_ENTRY         ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -106,7 +102,6 @@ TCB:
   dd SELECTOR_DATA3 | 3 ; FS
   dd SELECTOR_DATA3 | 3 ; GS
   dd SELECTOR_DATA3 | 3 ; SS
-  dd THREAD_RUNNING     ; STATE
   dd 0
   dd 0
   dd 0
@@ -121,7 +116,8 @@ TCB:
   dd 0
   dd 0
 .thread1:
-  dd .thread2           ; NEXT
+  dd .thread1           ; NEXT
+  dd .thread1           ; PREV
   dd 0x00000000         ; CR3
   dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -139,7 +135,6 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; FS
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
-  dd THREAD_BLOCKED     ; STATE
   dd 0
   dd 0
   dd 0
@@ -154,7 +149,8 @@ TCB:
   dd 0
   dd 0
 .thread2:
-  dd .thread3           ; NEXT
+  dd .thread2           ; NEXT
+  dd .thread2           ; PREV
   dd 0x00000000         ; CR3
   dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -172,7 +168,6 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; FS
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
-  dd THREAD_BLOCKED     ; STATE
   dd 0
   dd 0
   dd 0
@@ -187,7 +182,8 @@ TCB:
   dd 0
   dd 0
 .thread3:
-  dd .thread0           ; NEXT
+  dd .thread3           ; NEXT
+  dd .thread3           ; PREV
   dd 0x00000000         ; CR3
   dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -205,7 +201,6 @@ TCB:
   dd SELECTOR_DATA0 | 0 ; FS
   dd SELECTOR_DATA0 | 0 ; GS
   dd SELECTOR_DATA0 | 0 ; SS
-  dd THREAD_BLOCKED     ; STATE
   dd 0
   dd 0
   dd 0
@@ -220,6 +215,14 @@ TCB:
   dd 0
   dd 0
 .end:
+
+;-------------------------------------------------------------------------------
+; RUN QUEUE
+;-------------------------------------------------------------------------------
+
+section .data
+
+CurrentThread dd TCB.thread0
 
 ;-------------------------------------------------------------------------------
 ; NOTIFICATIONS
@@ -1217,18 +1220,36 @@ MessageException1F:
   mov [ebx+TCB_EDI], eax
 %endmacro
 
-%macro SCHEDULER_SELECTTHREAD 1
+%macro SCHEDULER_LINKTHREAD 3
+  mov %2, [CurrentThread]
+  mov %3, [%2+TCB_NEXT]
+  mov [%2+TCB_NEXT], %1
+  mov [%1+TCB_PREV], %2
+  mov [%1+TCB_NEXT], %3
+  mov [%3+TCB_PREV], %1
+%endmacro
+
+%macro SCHEDULER_LINKANDSELECTTHREAD 1
+  mov eax, [CurrentThread]
+  mov edx, [eax+TCB_NEXT]
+  mov [eax+TCB_NEXT], %1
+  mov [%1+TCB_PREV], eax
+  mov [%1+TCB_NEXT], edx
+  mov [edx+TCB_PREV], %1
   mov [CurrentThread], %1
-  mov dword [%1+TCB_STATE], THREAD_RUNNING
+%endmacro
+
+%macro SCHEDULER_UNLINKFROMRUNQUEUE 0
+  mov eax, [ebx+TCB_PREV]
+  mov edx, [ebx+TCB_NEXT]
+  ; FIXME: edge case when EAX = EBX = EDX
+  mov [eax+TCB_NEXT], edx
+  mov [edx+TCB_PREV], eax
 %endmacro
 
 %macro SCHEDULER_NEXTTHREAD 0
-  %%next_thread:
-    mov ebx, [ebx+TCB_NEXT]
-    mov eax, [ebx+TCB_STATE]
-    cmp eax, THREAD_RUNNING
-    jne %%next_thread
-    mov [CurrentThread], ebx
+  mov ebx, [ebx+TCB_NEXT]
+  mov [CurrentThread], ebx
 %endmacro
 
 %macro SCHEDULER_SWITCHTASK 0
@@ -1328,10 +1349,6 @@ IRQ0_Handler:
 ;
 ; Reflected back to user mode.
 ;
-; FIXME:
-;
-; - Does not schedule the thread immediately.
-;
 align 4
 IRQ1_Handler:
 .prologue:
@@ -1345,8 +1362,7 @@ IRQ1_Handler:
   jz .no_user_handler_waiting
   xor eax, eax
   mov [NotificationQueue+4*1], eax
-  mov dword [ebx+TCB_STATE], THREAD_RUNNING
-  SCHEDULER_SELECTTHREAD ebx
+  SCHEDULER_LINKANDSELECTTHREAD ebx
   SCHEDULER_SWITCHTASK
 .epilogue:
   SCHEDULER_EPILOGUE
@@ -1656,7 +1672,7 @@ SysCall_SetTCB:
   mov dword [eax+TCB_FS], SELECTOR_DATA3 | 3
   mov dword [eax+TCB_GS], SELECTOR_DATA3 | 3
   mov dword [eax+TCB_SS], SELECTOR_DATA3 | 3
-  mov dword [eax+TCB_STATE], THREAD_RUNNING
+  SCHEDULER_LINKTHREAD eax,ebx,edx
 .epilogue:
   popa
   iret
@@ -1702,8 +1718,9 @@ SysCall_Wait:
   mov eax, [NotificationQueue+4*ecx]
   or eax, eax
   jnz .error_double_wait
+  ; add to notification queue (FIXME: not a queue yet)
   mov [NotificationQueue+4*ecx], ebx
-  mov dword [ebx+TCB_STATE], THREAD_BLOCKED
+  SCHEDULER_UNLINKFROMRUNQUEUE
   SCHEDULER_NEXTTHREAD
   SCHEDULER_SWITCHTASK
 .epilogue:
