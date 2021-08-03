@@ -6,6 +6,8 @@
 %include "defs.inc"
 %include "kernel.inc"
 
+%include "schedule.inc"
+
 cpu   386
 bits  32
 
@@ -1162,141 +1164,6 @@ MessageException1F:
   db 'Unknown Exception (1Fh)',0
 
 ;-------------------------------------------------------------------------------
-; SCHEDULING
-;-------------------------------------------------------------------------------
-
-%macro SCHEDULER_PROLOGUE 0
-  pusha
-  xor eax, eax
-  mov ax, ds
-  push eax
-  mov ax, es
-  push eax
-  mov ax, fs
-  push eax
-  mov ax, gs
-  push eax
-  mov eax, SELECTOR_DATA0
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
-  mov ebp, esp
-%endmacro
-
-%macro SCHEDULER_SAVESTATE 0
-  mov ebx, [CurrentThread]
-  mov eax, [ebp+64]
-  mov [ebx+TCB_SS], eax
-  mov eax, [ebp+60]
-  mov [ebx+TCB_ESP], eax
-  mov eax, [ebp+56]
-  mov [ebx+TCB_EFLAGS], eax
-  mov eax, [ebp+52]
-  mov [ebx+TCB_CS], eax
-  mov eax, [ebp+48]
-  mov [ebx+TCB_EIP], eax
-  mov eax, [ebp+12]
-  mov [ebx+TCB_DS], eax
-  mov eax, [ebp+8]
-  mov [ebx+TCB_ES], eax
-  mov eax, [ebp+4]
-  mov [ebx+TCB_FS], eax
-  mov eax, [ebp+0]
-  mov [ebx+TCB_GS], eax
-  mov eax, [ebp+44]
-  mov [ebx+TCB_EAX], eax
-  mov eax, [ebp+40]
-  mov [ebx+TCB_ECX], eax
-  mov eax, [ebp+36]
-  mov [ebx+TCB_EDX], eax
-  mov eax, [ebp+32]
-  mov [ebx+TCB_EBX], eax
-  mov eax, [ebp+24]
-  mov [ebx+TCB_EBP], eax
-  mov eax, [ebp+20]
-  mov [ebx+TCB_ESI], eax
-  mov eax, [ebp+16]
-  mov [ebx+TCB_EDI], eax
-%endmacro
-
-%macro SCHEDULER_LINKTHREAD 3
-  mov %2, [CurrentThread]
-  mov %3, [%2+TCB_NEXT]
-  mov [%2+TCB_NEXT], %1
-  mov [%1+TCB_PREV], %2
-  mov [%1+TCB_NEXT], %3
-  mov [%3+TCB_PREV], %1
-%endmacro
-
-%macro SCHEDULER_LINKANDSELECTTHREAD 1
-  mov eax, [CurrentThread]
-  mov edx, [eax+TCB_NEXT]
-  mov [eax+TCB_NEXT], %1
-  mov [%1+TCB_PREV], eax
-  mov [%1+TCB_NEXT], edx
-  mov [edx+TCB_PREV], %1
-  mov [CurrentThread], %1
-%endmacro
-
-%macro SCHEDULER_UNLINKFROMRUNQUEUE 0
-  mov eax, [ebx+TCB_PREV]
-  mov edx, [ebx+TCB_NEXT]
-  ; FIXME: edge case when EAX = EBX = EDX
-  mov [eax+TCB_NEXT], edx
-  mov [edx+TCB_PREV], eax
-%endmacro
-
-%macro SCHEDULER_NEXTTHREAD 0
-  mov ebx, [ebx+TCB_NEXT]
-  mov [CurrentThread], ebx
-%endmacro
-
-%macro SCHEDULER_SWITCHTASK 0
-  mov eax, [ebx+TCB_SS]
-  mov [ebp+64], eax
-  mov eax, [ebx+TCB_ESP]
-  mov [ebp+60], eax
-  mov eax, [ebx+TCB_EFLAGS]
-  mov [ebp+56], eax
-  mov eax, [ebx+TCB_CS]
-  mov [ebp+52], eax
-  mov eax, [ebx+TCB_EIP]
-  mov [ebp+48], eax
-  mov eax, [ebx+TCB_DS]
-  mov [ebp+12], eax
-  mov eax, [ebx+TCB_ES]
-  mov [ebp+8], eax
-  mov eax, [ebx+TCB_FS]
-  mov [ebp+4], eax
-  mov eax, [ebx+TCB_GS]
-  mov [ebp+0], eax
-  mov eax, [ebx+TCB_EAX]
-  mov [ebp+44], eax
-  mov eax, [ebx+TCB_ECX]
-  mov [ebp+40], eax
-  mov eax, [ebx+TCB_EDX]
-  mov [ebp+36], eax
-  mov eax, [ebx+TCB_EBX]
-  mov [ebp+32], eax
-  mov eax, [ebx+TCB_EBP]
-  mov [ebp+24], eax
-  mov eax, [ebx+TCB_ESI]
-  mov [ebp+20], eax
-  mov eax, [ebx+TCB_EDI]
-  mov [ebp+16], eax
-%endmacro
-
-%macro SCHEDULER_EPILOGUE 0
-  pop gs
-  pop fs
-  pop es
-  pop ds
-  popa
-  iret
-%endmacro
-
-;-------------------------------------------------------------------------------
 ; INTERRUPT HANDLERS
 ;-------------------------------------------------------------------------------
 
@@ -1331,10 +1198,10 @@ IRQ0_Handler:
 .body:
   mov al, 0
   call DebugIRQ
-  SCHEDULER_SAVESTATE
-  SCHEDULER_NEXTTHREAD
+  SCHEDULER_SAVESTATE ebx, eax
+  SCHEDULER_NEXTTHREAD ebx
   call DebugThread
-  SCHEDULER_SWITCHTASK
+  SCHEDULER_SWITCHTASK ebx, eax
 .eoi:
   mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL0
   out PORT_PIC_MASTER_CMD, al
@@ -1356,14 +1223,14 @@ IRQ1_Handler:
 .body:
   mov al, 1
   call DebugIRQ
-  SCHEDULER_SAVESTATE
+  SCHEDULER_SAVESTATE ebx, eax
   mov ebx, [NotificationQueue+4*1]
   or ebx, ebx
   jz .no_user_handler_waiting
   xor eax, eax
   mov [NotificationQueue+4*1], eax
-  SCHEDULER_LINKANDSELECTTHREAD ebx
-  SCHEDULER_SWITCHTASK
+  SCHEDULER_LINKANDSELECTTHREAD ebx, eax, edx
+  SCHEDULER_SWITCHTASK ebx, eax
 .epilogue:
   SCHEDULER_EPILOGUE
 .no_user_handler_waiting:
@@ -1672,7 +1539,7 @@ SysCall_SetTCB:
   mov dword [eax+TCB_FS], SELECTOR_DATA3 | 3
   mov dword [eax+TCB_GS], SELECTOR_DATA3 | 3
   mov dword [eax+TCB_SS], SELECTOR_DATA3 | 3
-  SCHEDULER_LINKTHREAD eax,ebx,edx
+  SCHEDULER_LINKTHREAD eax, ebx, edx
 .epilogue:
   popa
   iret
@@ -1713,16 +1580,16 @@ SysCall_Wait:
   mov dword [NotificationState+4*ecx], eax
   jmp .epilogue
 .not_active:
-  SCHEDULER_SAVESTATE
+  SCHEDULER_SAVESTATE ebx, eax
   mov ebx, [CurrentThread]
   mov eax, [NotificationQueue+4*ecx]
   or eax, eax
   jnz .error_double_wait
   ; add to notification queue (FIXME: not a queue yet)
   mov [NotificationQueue+4*ecx], ebx
-  SCHEDULER_UNLINKFROMRUNQUEUE
-  SCHEDULER_NEXTTHREAD
-  SCHEDULER_SWITCHTASK
+  SCHEDULER_UNLINKFROMRUNQUEUE ebx, eax, edx
+  SCHEDULER_NEXTTHREAD ebx
+  SCHEDULER_SWITCHTASK ebx, eax
 .epilogue:
   SCHEDULER_EPILOGUE
 .error_double_wait:

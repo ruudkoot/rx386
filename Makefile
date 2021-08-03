@@ -25,9 +25,9 @@ dist/boot/boot.sys: src/boot/boot.asm src/include/config.inc src/include/defs.in
 	mkdir -p dist/boot
 	nasm -f bin -i src/include/ -o dist/boot/boot.sys src/boot/boot.asm
 
-dist/kernel/kernel.elf: src/kernel/kernel.asm src/include/config.inc src/include/defs.inc src/include/kernel.inc
+dist/kernel/kernel.elf: src/kernel/kernel.asm src/include/config.inc src/include/defs.inc src/include/kernel.inc src/kernel/schedule.inc
 	mkdir -p dist/kernel
-	nasm -f elf -i src/include/ -o dist/kernel/kernel.elf src/kernel/kernel.asm
+	nasm -f elf -i src/include/ -i src/kernel/ -o dist/kernel/kernel.elf src/kernel/kernel.asm
 	strip --strip-unneeded dist/kernel/kernel.elf
 
 dist/user/user.elf: dist/user/start.elf dist/user/user.o src/user/user.ld
