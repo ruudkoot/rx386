@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-m32 -fno-pie -fno-asynchronous-unwind-tables -fno-stack-protector -Wall
+CFLAGS=-m32 -march=i386 -mtune=i386 -fno-pie -fno-asynchronous-unwind-tables -fno-stack-protector -Wall
 LD=ld -m elf_i386
 
 rx386: dist/disk.img
