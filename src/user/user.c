@@ -60,13 +60,11 @@ int c_thread_b() {
 }
 
 int c_thread_c() {
-  for (;;) {
-  }
+  for (;;);
 }
 
 int c_thread_d() {
-  for (;;) {
-  }
+  for (;;);
 }
 
 // keyboard

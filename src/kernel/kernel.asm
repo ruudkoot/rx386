@@ -118,8 +118,8 @@ TCB:
   dd 0
   dd 0
 .thread1:
-  dd .thread1           ; NEXT
-  dd .thread1           ; PREV
+  dd 0                  ; NEXT
+  dd 0                  ; PREV
   dd 0x00000000         ; CR3
   dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -151,8 +151,8 @@ TCB:
   dd 0
   dd 0
 .thread2:
-  dd .thread2           ; NEXT
-  dd .thread2           ; PREV
+  dd 0                  ; NEXT
+  dd 0                  ; PREV
   dd 0x00000000         ; CR3
   dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -184,8 +184,8 @@ TCB:
   dd 0
   dd 0
 .thread3:
-  dd .thread3           ; NEXT
-  dd .thread3           ; PREV
+  dd 0                  ; NEXT
+  dd 0                  ; PREV
   dd 0x00000000         ; CR3
   dd BusyLoop           ; EIP
   dd EFLAGS_IF          ; EFLAGS
@@ -230,6 +230,9 @@ CurrentThread dd TCB.thread0
 ; NOTIFICATIONS
 ;-------------------------------------------------------------------------------
 
+; FIXME: Wait queues can be a singly linked stack instead of a doubly linked
+;        ring. (TCB_NEXT = 0 signals the end of the queue.)
+
 NOTIFICATION_IDLE     equ 0
 NOTIFICATION_ACTIVE   equ 1
 NOTIFICATION_WAITING  equ 2
@@ -270,7 +273,41 @@ NotificationState:
   dd NOTIFICATION_IDLE
   dd NOTIFICATION_IDLE
 
-NotificationQueue:
+NotificationQueueNext:
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+  dd 0
+
+NotificationQueuePrev:
   dd 0
   dd 0
   dd 0
@@ -1224,28 +1261,31 @@ IRQ1_Handler:
   mov al, 1
   call DebugIRQ
   SCHEDULER_SAVESTATE ebx, eax
-  mov ebx, [NotificationQueue+4*1]
-  or ebx, ebx
-  jz .no_user_handler_waiting
-  xor eax, eax
-  mov [NotificationQueue+4*1], eax
+  mov eax, [NotificationState+4*1]
+  cmp eax, NOTIFICATION_IDLE
+  jz .state_idle
+  cmp eax, NOTIFICATION_ACTIVE  ; cannot happen - remove from critical path
+  jz .state_active
+.state_waiting:
+  NOTIFICATION_POP 1, ebx, eax, edx
   SCHEDULER_LINKANDSELECTTHREAD ebx, eax, edx
   SCHEDULER_SWITCHTASK ebx, eax
 .epilogue:
   SCHEDULER_EPILOGUE
-.no_user_handler_waiting:
-  mov eax, [NotificationState+4*1]
-  or eax, eax
-  jnz .double_irq
-  inc eax
-  mov dword [NotificationState+4*1], eax
+.state_idle:
+  mov dword [NotificationState+4*1], NOTIFICATION_ACTIVE
   jmp .epilogue
-.double_irq:
-  mov esi, .double_irq_message
+.state_active:
+  mov esi, MessageDoubleIRQ
   call PrintString
   call HaltSystem
-.double_irq_message:
-  db 'DOUBLE IRQ1',CR,LF,0
+
+section .data
+
+MessageDoubleIRQ:
+  db 'DOUBLE IRQ',CR,LF,0
+
+section .text
 
 ; Interrupt
 align 4
@@ -1574,33 +1614,33 @@ SysCall_Wait:
 .body:
   mov eax, [NotificationState+4*ecx]
   cmp eax, NOTIFICATION_ACTIVE
-  jne .not_active
-.active:
-  mov eax, NOTIFICATION_IDLE
-  mov dword [NotificationState+4*ecx], eax
+  jne .state_not_active
+.state_active:
+  mov dword [NotificationState+4*ecx], NOTIFICATION_IDLE
   jmp .epilogue
-.not_active:
-  SCHEDULER_SAVESTATE ebx, eax
+.state_not_active:
+  SCHEDULER_SAVESTATE ebx, edx
   mov ebx, [CurrentThread]
-  mov eax, [NotificationQueue+4*ecx]
-  or eax, eax
-  jnz .error_double_wait
-  ; add to notification queue (FIXME: not a queue yet)
-  mov [NotificationQueue+4*ecx], ebx
+  cmp eax, NOTIFICATION_IDLE
+  jne .state_waiting
+.state_idle:
+  mov dword [NotificationState+4*ecx], NOTIFICATION_WAITING
+  mov [NotificationQueueNext+4*ecx], ebx
+  mov [NotificationQueuePrev+4*ecx], ebx
+  jmp .schedule
+.state_waiting:
+  ; FIXME: overly complicated as we maintain a ring, while we only need a stack
+  mov eax, [NotificationQueuePrev+4*ecx]
+  mov edx, [NotificationQueueNext+4*ecx]
+  mov [eax+TCB_NEXT], ebx
+  mov [edx+TCB_PREV], ebx
+  mov [NotificationQueueNext+4*ecx], ebx
+.schedule:
   SCHEDULER_UNLINKFROMRUNQUEUE ebx, eax, edx
   SCHEDULER_NEXTTHREAD ebx
   SCHEDULER_SWITCHTASK ebx, eax
 .epilogue:
   SCHEDULER_EPILOGUE
-.error_double_wait:
-  mov esi, Message_DoubleWait
-  call PrintString
-  call HaltSystem
-
-section .data
-
-Message_DoubleWait:
-  db 'DOUBLE WAIT',CR,LF,0
 
 section .text
 
@@ -1648,7 +1688,7 @@ HaltSystem:
 section .data
 
 MessageSystemHalted:
-  db 'SYSTEM HALTED!',13,10,0
+  db 'SYSTEM HALTED!',CR,LF,0
 
 section .text
 

@@ -132,3 +132,26 @@
   popa
   iret
 %endmacro
+
+;-------------------------------------------------------------------------------
+; NOTIFICATIONS
+;-------------------------------------------------------------------------------
+
+;
+; NOTIFICATION_POP - Pop TCB from queue and set state to idle if empty
+;
+%macro NOTIFICATION_POP 4
+  mov %2, [NotificationQueueNext+4*%1]
+  mov %3, [NotificationQueuePrev+4*%1]
+  cmp %2, %3
+  jne %%queue_multiple
+%%queue_single:
+  mov dword [NotificationState+4*%1], NOTIFICATION_IDLE
+  jmp %%done
+%%queue_multiple:
+  ; FIXME: overly complicated as we maintain a ring, while we only need a stack
+  mov %4, [%2+TCB_NEXT]
+  mov [%4+TCB_PREV], %3
+  mov [NotificationQueueNext+4*%1], %4
+%%done:
+%endmacro
