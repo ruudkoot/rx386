@@ -15,7 +15,8 @@ SYSCALL_CONSOLEOUT  equ 0x30
 SYSCALL_SETTCB      equ 0x31
 SYSCALL_SETIOPB     equ 0x32
 SYSCALL_WAIT        equ 0x33
-SYSCALL_EOI         equ 0x34
+SYSCALL_SIGNAL      equ 0x34
+SYSCALL_EOI         equ 0x35
 
 TCB_NEXT            equ 0
 TCB_PREV            equ 4

@@ -130,6 +130,7 @@ section .text
 global _inb
 global _syscall_consoleout
 global _syscall_wait
+global _syscall_signal
 global _syscall_eoi
 
 _inb:
@@ -146,6 +147,11 @@ _syscall_consoleout:
 _syscall_wait:
   mov ecx, [esp+4]
   int SYSCALL_WAIT
+  ret
+
+_syscall_signal:
+  mov ecx, [esp+4]
+  int SYSCALL_SIGNAL
   ret
 
 _syscall_eoi:

@@ -3,6 +3,7 @@
 extern unsigned char _inb(int port);
 extern int _syscall_consoleout(char c);
 extern int _syscall_wait(int notification);
+extern int _syscall_signal(int notification);
 extern int _syscall_eoi(int irq);
 
 int getchar();
@@ -25,6 +26,7 @@ int readline(char * buf, size_t len);
 #define NOTIFICATION_IRQ13  13
 #define NOTIFICATION_IRQ14  14
 #define NOTIFICATION_IRQ15  15
+#define NOTIFICATION_KBDBUF 16
 
 #define PORT_KEYB_DATA 0x060
 
@@ -55,6 +57,7 @@ int c_thread_b() {
     if ((kbdbuf_end+1) % KBDBUF_SIZE != kbdbuf_start) {
       kbdbuf[kbdbuf_end] = k;
       kbdbuf_end = (kbdbuf_end + 1) % KBDBUF_SIZE;
+      _syscall_signal(NOTIFICATION_KBDBUF);
     }
   }
 }
@@ -107,7 +110,7 @@ int kbd_decode(unsigned char k) {
 int getchar() {
   unsigned char c = 0;
   while (!c) {
-    while (kbdbuf_start == kbdbuf_end); // FIXME: notification
+    _syscall_wait(NOTIFICATION_KBDBUF);
     c = kbd_decode(kbdbuf[kbdbuf_start]);
     kbdbuf_start = (kbdbuf_start + 1) % KBDBUF_SIZE;
   }

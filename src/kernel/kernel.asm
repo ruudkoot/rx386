@@ -6,6 +6,7 @@
 %include "defs.inc"
 %include "kernel.inc"
 
+%include "debug.inc"
 %include "schedule.inc"
 
 cpu   386
@@ -712,6 +713,9 @@ IDT:
 .syscall_wait:
   dd SysCall_Wait
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_signal:
+  dd SysCall_Signal
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .syscall_eoi:
   dd SysCall_EOI
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
@@ -1233,8 +1237,7 @@ IRQ0_Handler:
 .prologue:
   SCHEDULER_PROLOGUE
 .body:
-  mov al, 0
-  call DebugIRQ
+  DEBUG_IRQ 0
   SCHEDULER_SAVESTATE ebx, eax
   SCHEDULER_NEXTTHREAD ebx
   call DebugThread
@@ -1242,310 +1245,188 @@ IRQ0_Handler:
 .eoi:
   mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL0
   out PORT_PIC_MASTER_CMD, al
-  ;in al, PORT_KEYB_DATA
-  ;mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL1
-  ;out PORT_PIC_MASTER_CMD, al
 .epilogue:
   SCHEDULER_EPILOGUE
 
 ;
 ; IRQ1_Handler - Keyboard Controller
 ;
-; Reflected back to user mode.
-;
 align 4
 IRQ1_Handler:
 .prologue:
   SCHEDULER_PROLOGUE
 .body:
-  mov al, 1
-  call DebugIRQ
-  SCHEDULER_SAVESTATE ebx, eax
-  mov eax, [NotificationState+4*1]
-  cmp eax, NOTIFICATION_IDLE
-  jz .state_idle
-  cmp eax, NOTIFICATION_ACTIVE  ; cannot happen - remove from critical path
-  jz .state_active
-.state_waiting:
-  NOTIFICATION_POP 1, ebx, eax, edx
-  SCHEDULER_LINKANDSELECTTHREAD ebx, eax, edx
-  SCHEDULER_SWITCHTASK ebx, eax
-.epilogue:
-  SCHEDULER_EPILOGUE
-.state_idle:
-  mov dword [NotificationState+4*1], NOTIFICATION_ACTIVE
-  jmp .epilogue
-.state_active:
-  mov esi, MessageDoubleIRQ
-  call PrintString
-  call HaltSystem
+  mov ecx, 1
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-section .data
-
-MessageDoubleIRQ:
-  db 'DOUBLE IRQ',CR,LF,0
-
-section .text
-
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ2_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 2
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ2!',CR,LF,0
+  mov ecx, 2
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ3_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 3
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ3!',CR,LF,0
+  mov ecx, 3
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ4_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 4
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ4!',CR,LF,0
+  mov ecx, 4
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ5_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 5
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ5!',CR,LF,0
+  mov ecx, 5
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ6_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 6
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ6!',CR,LF,0
+  mov ecx, 6
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ7_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 7
-  call DebugIRQ
-  mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL7
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  ;jmp HaltSystem
-  popa
-  iret
-.message:
-  db '### IRQ7! ###',CR,LF,0
+  mov ecx, 7
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ8_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 8
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ8!',CR,LF,0
+  mov ecx, 8
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ9_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 9
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ9!',CR,LF,0
+  mov ecx, 9
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ10_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 10
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ10!',CR,LF,0
+  mov ecx, 10
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ11_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 11
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ11!',CR,LF,0
+  mov ecx, 11
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ12_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 12
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ12!',CR,LF,0
+  mov ecx, 12
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ13_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 13
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ13!',CR,LF,0
+  mov ecx, 13
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ14_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 14
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ14!',CR,LF,0
+  mov ecx, 14
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
-; Interrupt
+;
+; IRQ2_Handler
+;
 align 4
 IRQ15_Handler:
-  pusha
+.prologue:
+  SCHEDULER_PROLOGUE
 .body:
-  mov al, 15
-  call DebugIRQ
-  mov al, PIC_CMD_NONSPECIFIC_EOI
-  out PORT_PIC_SLAVE_CMD, al
-  out PORT_PIC_MASTER_CMD, al
-.epilogue:
-  mov esi, .message
-  call PrintString
-  jmp HaltSystem
-  popa
-  iret
-.message:
-  db 'UNEXPECTED IRQ15!',CR,LF,0
+  mov ecx, 15
+  DEBUG_IRQ ecx
+  jmp SysCall_Signal.body
 
 ;-------------------------------------------------------------------------------
 ; SYSTEM CALLS
@@ -1641,6 +1522,36 @@ SysCall_Wait:
   SCHEDULER_SWITCHTASK ebx, eax
 .epilogue:
   SCHEDULER_EPILOGUE
+
+;
+; SysCall_Signal - Signal a Notification
+;
+; Calling Registers:
+;
+;   ECX   Notification/IRQ#
+;
+align 4
+SysCall_Signal:
+.prologue:
+  SCHEDULER_PROLOGUE
+.body:
+  SCHEDULER_SAVESTATE ebx, eax
+  mov eax, [NotificationState+4*ecx]
+  cmp eax, NOTIFICATION_IDLE
+  jz .state_idle
+  cmp eax, NOTIFICATION_ACTIVE
+  jz .state_active
+.state_waiting:
+  NOTIFICATION_POP ecx, ebx, eax, edx
+  SCHEDULER_LINKANDSELECTTHREAD ebx, eax, edx
+  SCHEDULER_SWITCHTASK ebx, eax
+.epilogue:
+  SCHEDULER_EPILOGUE
+.state_idle:
+  mov dword [NotificationState+4*ecx], NOTIFICATION_ACTIVE
+  jmp .epilogue
+.state_active:
+  jmp .epilogue
 
 section .text
 
@@ -1753,21 +1664,6 @@ DebugThread:
   shr ebx, 7
   add bl, 'A'
   mov [CONSOLE_FRAMEBUFFER+CONSOLE_ROWS*CONSOLE_COLS*2], bl
-  popa
-  ret
-
-;
-; DebugIRQ
-;
-; Calling Regsiters:
-;
-;   AL = irq
-;
-DebugIRQ:
-  pusha
-  cbw
-  mov ebx, eax
-  inc byte [CONSOLE_FRAMEBUFFER+2*ebx+128+CONSOLE_ROWS*CONSOLE_COLS*2]
   popa
   ret
 
