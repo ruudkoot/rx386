@@ -719,6 +719,9 @@ IDT:
 .syscall_eoi:
   dd SysCall_EOI
   dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
+.syscall_yield:
+  dd SysCall_Yield
+  dd SELECTOR_CODE0 | ID_GATETYPE_INTR32 | ID_DPL3 | ID_PRESENT
 .end:
 
 IDTR:
@@ -1240,7 +1243,7 @@ IRQ0_Handler:
   DEBUG_IRQ 0
   SCHEDULER_SAVESTATE ebx, eax
   SCHEDULER_NEXTTHREAD ebx
-  call DebugThread
+  DEBUG_THREAD ebx, bl
   SCHEDULER_SWITCHTASK ebx, eax
 .eoi:
   mov al, PIC_CMD_SPECIFIC_EOI | PIC_SEOI_LVL0
@@ -1476,6 +1479,16 @@ SysCall_SetIOPB:
   iret
 
 ;
+; SysCall_Yield
+;
+align 4
+SysCall_Yield:
+  SCHEDULER_PROLOGUE
+  SCHEDULER_SAVESTATE ebx, eax
+  SCHEDULER_NEXTTHREAD ebx
+  SCHEDULER_SWITCHTASK ebx, eax
+  SCHEDULER_EPILOGUE
+;
 ; SysCall_Wait - Wait on a Notification
 ;
 ; Calling Registers:
@@ -1651,22 +1664,6 @@ MessagePanic:
   db 0
 
 section .text
-
-;
-; DebugIRQ
-;
-; Calling Regsiters:
-;
-;   EBX = thread
-;
-DebugThread:
-  pusha
-  sub ebx, TCB.start
-  shr ebx, 7
-  add bl, 'A'
-  mov [CONSOLE_FRAMEBUFFER+CONSOLE_ROWS*CONSOLE_COLS*2], bl
-  popa
-  ret
 
 ;-------------------------------------------------------------------------------
 ; CONSOLE

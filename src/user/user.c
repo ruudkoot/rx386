@@ -1,10 +1,11 @@
 #define size_t int
 
 extern unsigned char _inb(int port);
-extern int _syscall_consoleout(char c);
-extern int _syscall_wait(int notification);
-extern int _syscall_signal(int notification);
-extern int _syscall_eoi(int irq);
+extern void _syscall_yield();
+extern void _syscall_consoleout(char c);
+extern void _syscall_wait(int notification);
+extern void _syscall_signal(int notification);
+extern void _syscall_eoi(int irq);
 
 int getchar();
 int putchar(int c);
@@ -63,7 +64,7 @@ int c_thread_b() {
 }
 
 int c_thread_c() {
-  for (;;);
+  for (;;) _syscall_yield();
 }
 
 int c_thread_d() {

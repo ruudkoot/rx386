@@ -132,6 +132,7 @@ global _syscall_consoleout
 global _syscall_wait
 global _syscall_signal
 global _syscall_eoi
+global _syscall_yield
 
 _inb:
   xor eax, eax
@@ -155,6 +156,10 @@ _syscall_signal:
   ret
 
 _syscall_eoi:
-  mov eax, [esp+4]
+  mov ecx, [esp+4]
   int SYSCALL_EOI
+  ret
+
+_syscall_yield:
+  int SYSCALL_YIELD
   ret

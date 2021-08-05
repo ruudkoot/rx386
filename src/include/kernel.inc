@@ -17,6 +17,7 @@ SYSCALL_SETIOPB     equ 0x32
 SYSCALL_WAIT        equ 0x33
 SYSCALL_SIGNAL      equ 0x34
 SYSCALL_EOI         equ 0x35
+SYSCALL_YIELD       equ 0x36
 
 TCB_NEXT            equ 0
 TCB_PREV            equ 4
