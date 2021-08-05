@@ -1515,7 +1515,8 @@ SysCall_Wait:
   mov edx, [NotificationQueueNext+4*ecx]
   mov [eax+TCB_NEXT], ebx
   mov [edx+TCB_PREV], ebx
-  mov [NotificationQueueNext+4*ecx], ebx
+  ; queue at the end for fairness
+  mov [NotificationQueuePrev+4*ecx], ebx
 .schedule:
   SCHEDULER_UNLINKFROMRUNQUEUE ebx, eax, edx
   SCHEDULER_NEXTTHREAD ebx
