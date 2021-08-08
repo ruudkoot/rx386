@@ -1,10 +1,13 @@
 ENTRY(_USER_START)
 OUTPUT_FORMAT(elf32-i386)
 SEARCH_DIR(dist/user)
+SEARCH_DIR(dist/libc)
 INPUT
 (
   start.elf
   user.o
+  fdc.o
+  stdlib.o
 )
 OUTPUT(dist/user/user.elf)
 SECTIONS

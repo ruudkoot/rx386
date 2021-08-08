@@ -35,8 +35,17 @@ Main:
   mov esi, Signature
   call PrintString
 .set_iopb:
+  mov eax, 0
+  mov edx, 0x00000000 ; 0x000 - 0x01F
+  int SYSCALL_SETIOPB
   mov eax, 3
-  mov edx, 0xFFFFFF00 ; 0x60 - 0x67
+  mov edx, 0xFFFFFF00 ; 0x060 - 0x067
+  int SYSCALL_SETIOPB
+  mov eax, 4
+  mov edx, 0x00000000 ; 0x080 - 0x09F
+  int SYSCALL_SETIOPB
+  mov eax, 31
+  mov edx, 0xFF00FFFF ; 0x3F0 - 0x3F7
   int SYSCALL_SETIOPB
 .start_threads:
   mov eax, 1
@@ -128,6 +137,7 @@ PrintString:
 section .text
 
 global _inb
+global _outb
 global _syscall_consoleout
 global _syscall_wait
 global _syscall_signal
@@ -138,6 +148,12 @@ _inb:
   xor eax, eax
   mov edx, [esp+4]
   in al, dx
+  ret
+
+_outb:
+  mov eax, [esp+8]
+  mov edx, [esp+4]
+  out dx, al
   ret
 
 _syscall_consoleout:

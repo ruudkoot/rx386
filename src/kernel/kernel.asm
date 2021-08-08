@@ -54,9 +54,9 @@ Main:
   mov [TCB.thread2+TCB_CR3], eax
   mov [TCB.thread3+TCB_CR3], eax
 .enable_irqs:
-  mov al, IRQ7 | IRQ6 | IRQ5 | IRQ4 | IRQ3 | IRQ2
+  mov al, ~(IRQ6 | IRQ1 | IRQ0)
   out PORT_PIC_MASTER_DATA, al
-  mov al, IRQ15 | IRQ14 | IRQ13 | IRQ12 | IRQ11 | IRQ10 | IRQ9 | IRQ8
+  mov al, ~(0)
   out PORT_PIC_SLAVE_DATA, al
 .enter_ring3:
   mov eax, SELECTOR_DATA3 | 3

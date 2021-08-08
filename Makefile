@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-m32 -march=i386 -mtune=i386 -fno-pie -fno-asynchronous-unwind-tables -fno-stack-protector -Wall
+CFLAGS=-nostdinc -Isrc/libc -m32 -march=i386 -mtune=i386 -fno-pie -fno-asynchronous-unwind-tables -fno-stack-protector -Wall
 LD=ld -m elf_i386
 
 rx386: dist/disk.img
@@ -30,7 +30,11 @@ dist/kernel/kernel.elf: src/kernel/kernel.asm src/include/config.inc src/include
 	nasm -f elf -i src/include/ -i src/kernel/ -o dist/kernel/kernel.elf src/kernel/kernel.asm
 	strip --strip-unneeded dist/kernel/kernel.elf
 
-dist/user/user.elf: dist/user/start.elf dist/user/user.o src/user/user.ld
+dist/libc/stdlib.o: src/libc/stdlib.c src/libc/stdlib.h
+	mkdir -p dist/libc
+	$(CC) -c $(CFLAGS) -o dist/libc/stdlib.o src/libc/stdlib.c
+
+dist/user/user.elf: dist/libc/stdlib.o dist/user/start.elf dist/user/user.o dist/user/fdc.o src/user/user.ld
 	$(LD) -T src/user/user.ld
 	strip --strip-unneeded dist/user/user.elf
 
@@ -38,9 +42,13 @@ dist/user/start.elf: src/user/start.asm src/include/config.inc src/include/defs.
 	mkdir -p dist/user
 	nasm -f elf -i src/include/ -o dist/user/start.elf src/user/start.asm
 
-dist/user/user.o: src/user/user.c
+dist/user/user.o: src/user/user.c src/user/rx386.h src/user/fdc.h
 	mkdir -p dist/user
 	$(CC) -c $(CFLAGS) -o dist/user/user.o src/user/user.c
+
+dist/user/fdc.o: src/user/fdc.c src/libc/stdlib.h src/user/rx386.h src/user/fdc.h
+	mkdir -p dist/user
+	$(CC) -c $(CFLAGS) -o dist/user/fdc.o src/user/fdc.c
 
 .PHONY: clean
 

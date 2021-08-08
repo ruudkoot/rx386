@@ -1,33 +1,10 @@
-#define size_t int
-
-extern unsigned char _inb(int port);
-extern void _syscall_yield();
-extern void _syscall_consoleout(char c);
-extern void _syscall_wait(int notification);
-extern void _syscall_signal(int notification);
-extern void _syscall_eoi(int irq);
+#include "rx386.h"
+#include "fdc.h"
 
 int getchar();
 int putchar(int c);
-int printf(const char * format, ...);
+int printline(const char * str);
 int readline(char * buf, size_t len);
-
-#define NOTIFICATION_IRQ1   1
-#define NOTIFICATION_IRQ2   2
-#define NOTIFICATION_IRQ3   3
-#define NOTIFICATION_IRQ4   4
-#define NOTIFICATION_IRQ5   5
-#define NOTIFICATION_IRQ6   6
-#define NOTIFICATION_IRQ7   7
-#define NOTIFICATION_IRQ8   8
-#define NOTIFICATION_IRQ9   9
-#define NOTIFICATION_IRQ10  10
-#define NOTIFICATION_IRQ11  11
-#define NOTIFICATION_IRQ12  12
-#define NOTIFICATION_IRQ13  13
-#define NOTIFICATION_IRQ14  14
-#define NOTIFICATION_IRQ15  15
-#define NOTIFICATION_KBDBUF 16
 
 #define PORT_KEYB_DATA 0x060
 
@@ -42,10 +19,14 @@ int kbd_decode(unsigned char k);
 
 int c_thread_a() {
   char cmdline[CMDLINE_SIZE];
+  printline("\n\n");
+  fdc_enable(FDC_DRIVE_A);
   for(;;) {
-    printf("\n\x14 ");
+    printline("\n\x14 ");
     readline(cmdline, CMDLINE_SIZE);
-    printf(cmdline);
+    printline(cmdline);
+    printline("\n\n");
+    fdc_readsector(0, 0, 0, 1);
   }
 }
 
@@ -64,7 +45,8 @@ int c_thread_b() {
 }
 
 int c_thread_c() {
-  for (;;) _syscall_yield();
+  for (;;) {
+  }
 }
 
 int c_thread_d() {
@@ -136,11 +118,11 @@ int putchar(int c) {
   return c;
 }
 
-int printf(const char * format, ...) {
+int printline(const char * str) {
   int i = 0;
-  while (*format) {
-    putchar(*format);
-    format++;
+  while (*str) {
+    putchar(*str);
+    str++;
     i++;
   }
   return i;
