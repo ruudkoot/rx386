@@ -1856,6 +1856,11 @@ A20Test:
 ;   BL = master interrupt base
 ;   BH = slave interrupt base
 ;
+; Notes:
+;
+;   - MCA uses level-triggered interrupts:
+;     https://scalibq.wordpress.com/2015/12/15/pc-compatibility-its-all-relative/
+;
 PicInitialize:
   push ax
 .icw1:
